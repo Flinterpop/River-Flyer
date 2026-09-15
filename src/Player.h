@@ -7,10 +7,13 @@ class Player {
 public:
     void Reset();
     void Update(float dt);
-    void Draw() const;
+    void Draw(const Texture2D& tex, bool visible) const;
 
     // Axis-aligned hit box in world/screen space.
     Rectangle Bounds() const;
+
+    // Where bullets leave the craft (nose, top centre).
+    Vector2 Muzzle() const;
 
 private:
     Vector2 pos_ {0.0f, 0.0f};   // top-left corner

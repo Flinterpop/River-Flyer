@@ -28,6 +28,7 @@ void Terrain::Reset()
 
     for (Obstacle& o : obstacles_) {
         o.active = false;
+        o.kind   = Kind::Rock;
         o.rect   = Rectangle {0.0f, 0.0f, 0.0f, 0.0f};
     }
 
@@ -40,6 +41,14 @@ void Terrain::Reset()
     }
     assert(strips_.front().width >= cfg::kRiverMinW);
     assert(strips_.back().width  <= cfg::kRiverMaxW);
+}
+
+float Terrain::ScrollSpeed() const
+{
+    assert(cfg::kRampDistance > 0.0f);
+    const float mult = Clamp(1.0f + distance_ / cfg::kRampDistance, 1.0f, cfg::kRampMaxMult);
+    assert(mult >= 1.0f && mult <= cfg::kRampMaxMult);
+    return cfg::kScrollSpeed * mult;
 }
 
 Terrain::Strip Terrain::MakeNextStrip(const Strip& above) const
@@ -68,19 +77,29 @@ void Terrain::ShiftStripsDown()
 
 void Terrain::TrySpawnObstacle(const Strip& strip)
 {
-    assert(cfg::kObstacleChance >= 0 && cfg::kObstacleChance <= 100);
-    if (GetRandomValue(1, 100) > cfg::kObstacleChance) { return; }
+    assert(cfg::kRockChance >= 0 && cfg::kRockChance + cfg::kFuelChance <= 100);
+    const int roll = GetRandomValue(1, 100);
+    if (roll <= cfg::kRockChance) {
+        PlaceObstacle(strip, Kind::Rock);
+    } else if (roll <= cfg::kRockChance + cfg::kFuelChance) {
+        PlaceObstacle(strip, Kind::Fuel);
+    }
+}
 
-    // Find a free slot; the pool is fixed so give up if it's full.
+void Terrain::PlaceObstacle(const Strip& strip, Kind kind)
+{
+    const float minX = strip.centreX - strip.width * 0.5f + cfg::kObstacleInset;
+    const float maxX = strip.centreX + strip.width * 0.5f - cfg::kObstacleW - cfg::kObstacleInset;
+    assert(minX < maxX);
+
+    // Find a free slot; the pool is fixed so give up if it is full.
     for (Obstacle& o : obstacles_) {
         if (o.active) { continue; }
-        const float minX = strip.centreX - strip.width * 0.5f + 8.0f;
-        const float maxX = strip.centreX + strip.width * 0.5f - cfg::kObstacleW - 8.0f;
-        assert(minX < maxX);
         o.rect = Rectangle {
             static_cast<float>(GetRandomValue(static_cast<int>(minX), static_cast<int>(maxX))),
             -cfg::kObstacleH,            // just above the window, scrolls into view
             cfg::kObstacleW, cfg::kObstacleH};
+        o.kind   = kind;
         o.active = true;
         return;
     }
@@ -89,7 +108,7 @@ void Terrain::TrySpawnObstacle(const Strip& strip)
 void Terrain::Update(float dt)
 {
     assert(dt >= 0.0f);
-    const float step = cfg::kScrollSpeed * dt;
+    const float step = ScrollSpeed() * dt;
     distance_     += step;
     scrollOffset_ += step;
 
@@ -115,7 +134,7 @@ Rectangle Terrain::StripRect(int index) const
     return Rectangle {0.0f, y, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kStripH)};
 }
 
-void Terrain::Draw() const
+void Terrain::Draw(const Sprites& sprites) const
 {
     for (int i = 0; i < cfg::kStripCount; ++i) {
         const Strip&    s = strips_[static_cast<size_t>(i)];
@@ -123,19 +142,19 @@ void Terrain::Draw() const
         const float     left  = s.centreX - s.width * 0.5f;
         const float     right = s.centreX + s.width * 0.5f;
 
-        DrawRectangleRec(Rectangle {0.0f, r.y, left, r.height}, DARKGREEN);
-        DrawRectangleRec(Rectangle {left, r.y, right - left, r.height}, DARKBLUE);
-        DrawRectangleRec(Rectangle {right, r.y, r.width - right, r.height}, DARKGREEN);
+        DrawRectangleRec(Rectangle {0.0f, r.y, left, r.height}, LIME);
+        DrawRectangleRec(Rectangle {left, r.y, right - left, r.height}, SKYBLUE);
+        DrawRectangleRec(Rectangle {right, r.y, r.width - right, r.height}, LIME);
     }
 
     for (const Obstacle& o : obstacles_) {
         if (!o.active) { continue; }
-        DrawRectangleRec(o.rect, GRAY);
-        DrawRectangleLinesEx(o.rect, 2.0f, LIGHTGRAY);
+        const Texture2D& tex = (o.kind == Kind::Rock) ? sprites.Rock() : sprites.Fuel();
+        DrawTexture(tex, static_cast<int>(o.rect.x), static_cast<int>(o.rect.y), WHITE);
     }
 }
 
-bool Terrain::HitsBank(const Rectangle& r, int index) const
+bool Terrain::HitsBankStrip(const Rectangle& r, int index) const
 {
     assert(index >= 0 && index < cfg::kStripCount);
     const Strip&    s  = strips_[static_cast<size_t>(index)];
@@ -147,14 +166,34 @@ bool Terrain::HitsBank(const Rectangle& r, int index) const
     return (r.x < left) || (r.x + r.width > right);
 }
 
-bool Terrain::Collides(const Rectangle& r) const
+bool Terrain::HitsBank(const Rectangle& r) const
 {
     assert(r.width > 0.0f && r.height > 0.0f);
     for (int i = 0; i < cfg::kStripCount; ++i) {
-        if (HitsBank(r, i)) { return true; }
-    }
-    for (const Obstacle& o : obstacles_) {
-        if (o.active && CheckCollisionRecs(r, o.rect)) { return true; }
+        if (HitsBankStrip(r, i)) { return true; }
     }
     return false;
+}
+
+int Terrain::FindObstacle(const Rectangle& r) const
+{
+    assert(r.width > 0.0f && r.height > 0.0f);
+    for (int i = 0; i < cfg::kMaxObstacles; ++i) {
+        const Obstacle& o = obstacles_[static_cast<size_t>(i)];
+        if (o.active && CheckCollisionRecs(r, o.rect)) { return i; }
+    }
+    return -1;
+}
+
+const Terrain::Obstacle& Terrain::ObstacleAt(int i) const
+{
+    assert(i >= 0 && i < cfg::kMaxObstacles);
+    assert(obstacles_[static_cast<size_t>(i)].active);
+    return obstacles_[static_cast<size_t>(i)];
+}
+
+void Terrain::RemoveObstacle(int i)
+{
+    assert(i >= 0 && i < cfg::kMaxObstacles);
+    obstacles_[static_cast<size_t>(i)].active = false;
 }

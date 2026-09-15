@@ -51,17 +51,23 @@ void Player::Update(float dt)
     assert(pos_.y + cfg::kPlayerH <= static_cast<float>(cfg::kScreenH));
 }
 
-void Player::Draw() const
+void Player::Draw(const Texture2D& tex, bool visible) const
 {
-    // Simple delta-wing silhouette: nose at top centre, wings at the base.
-    const Vector2 nose  {pos_.x + cfg::kPlayerW * 0.5f, pos_.y};
-    const Vector2 left  {pos_.x,                        pos_.y + cfg::kPlayerH};
-    const Vector2 right {pos_.x + cfg::kPlayerW,        pos_.y + cfg::kPlayerH};
-    DrawTriangle(nose, left, right, YELLOW);
-    DrawTriangleLines(nose, left, right, ORANGE);
+    assert(tex.id != 0);
+    if (!visible) { return; }   // blink frame during the respawn grace period
+    DrawTexture(tex, static_cast<int>(pos_.x), static_cast<int>(pos_.y), WHITE);
 }
 
 Rectangle Player::Bounds() const
 {
-    return Rectangle {pos_.x, pos_.y, cfg::kPlayerW, cfg::kPlayerH};
+    // Slightly smaller than the sprite so near-misses feel fair.
+    const float inset = 3.0f;
+    assert(inset * 2.0f < cfg::kPlayerW && inset * 2.0f < cfg::kPlayerH);
+    return Rectangle {pos_.x + inset, pos_.y + inset,
+                      cfg::kPlayerW - 2.0f * inset, cfg::kPlayerH - 2.0f * inset};
+}
+
+Vector2 Player::Muzzle() const
+{
+    return Vector2 {pos_.x + cfg::kPlayerW * 0.5f, pos_.y};
 }

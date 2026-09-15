@@ -1,0 +1,60 @@
+#include "Bullets.h"
+
+#include <cassert>
+
+void Bullets::Reset()
+{
+    for (Bullet& b : pool_) {
+        b.active = false;
+        b.rect   = Rectangle {0.0f, 0.0f, cfg::kBulletW, cfg::kBulletH};
+    }
+}
+
+void Bullets::Fire(Vector2 muzzle)
+{
+    assert(muzzle.x >= 0.0f && muzzle.x <= static_cast<float>(cfg::kScreenW));
+    for (Bullet& b : pool_) {
+        if (b.active) { continue; }
+        b.rect.x = muzzle.x - cfg::kBulletW * 0.5f;
+        b.rect.y = muzzle.y - cfg::kBulletH;
+        b.active = true;
+        return;
+    }
+}
+
+void Bullets::Update(float dt)
+{
+    assert(dt >= 0.0f);
+    for (Bullet& b : pool_) {
+        if (!b.active) { continue; }
+        b.rect.y -= cfg::kBulletSpeed * dt;
+        if (b.rect.y + b.rect.height < 0.0f) { b.active = false; }
+    }
+}
+
+void Bullets::Draw(const Texture2D& tex) const
+{
+    assert(tex.id != 0);
+    for (const Bullet& b : pool_) {
+        if (b.active) { DrawTexture(tex, static_cast<int>(b.rect.x), static_cast<int>(b.rect.y), WHITE); }
+    }
+}
+
+bool Bullets::Active(int i) const
+{
+    assert(i >= 0 && i < Capacity());
+    return pool_[static_cast<size_t>(i)].active;
+}
+
+Rectangle Bullets::Bounds(int i) const
+{
+    assert(i >= 0 && i < Capacity());
+    assert(pool_[static_cast<size_t>(i)].active);
+    return pool_[static_cast<size_t>(i)].rect;
+}
+
+void Bullets::Kill(int i)
+{
+    assert(i >= 0 && i < Capacity());
+    pool_[static_cast<size_t>(i)].active = false;
+}
