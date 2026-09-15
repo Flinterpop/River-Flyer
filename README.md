@@ -21,6 +21,7 @@ Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-late
 | Space | Shoot. Rocks and fuel pumps both go down for 100 points |
 | Space / R / Enter | Fly again after losing the last plane |
 | Letters, Backspace, Enter | Type your name when you make the top ten |
+| Tab (hold) | Peek at the top-ten table mid-game |
 | F12 | Save `screenshotNNN.png` next to the exe |
 | Esc | Quit |
 

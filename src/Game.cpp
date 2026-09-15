@@ -292,6 +292,20 @@ void Game::DrawHud() const
     }
     if (state_ == State::EnterName) { DrawEnterName(); }
     if (state_ == State::GameOver)  { DrawGameOver(); }
+    // Hold Tab during play to peek at the table (the game keeps running).
+    if ((state_ == State::Playing || state_ == State::Crashing) && IsKeyDown(KEY_TAB)) { DrawPeekTable(); }
+}
+
+void Game::DrawPeekTable() const
+{
+    assert(state_ == State::Playing || state_ == State::Crashing);
+    const int panelW = 400;
+    const int panelH = 340;
+    const int px     = (cfg::kScreenW - panelW) / 2;
+    const int py     = (cfg::kScreenH - panelH) / 2;
+    DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.6f));
+    DrawRectangleLines(px, py, panelW, panelH, GOLD);
+    DrawScoreTable(px + 30, py + 20);
 }
 
 void Game::DrawFuelBar() const

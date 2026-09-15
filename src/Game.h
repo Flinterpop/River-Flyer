@@ -42,6 +42,7 @@ private:
     void DrawGameOver() const;
     void DrawEnterName() const;
     void DrawScoreTable(int x, int y) const;
+    void DrawPeekTable() const;
 
     Audio   audio_;
     Sprites sprites_;
