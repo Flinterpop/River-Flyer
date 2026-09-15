@@ -8,7 +8,7 @@
 
 int main()
 {
-    InitWindow(cfg::kScreenW, cfg::kScreenH, "River Flyer");
+    InitWindow(cfg::kScreenW, cfg::kScreenH, TextFormat("%s v%s", cfg::kTitle, cfg::kVersion));
     SetTargetFPS(cfg::kTargetFps);
     assert(IsWindowReady());
 

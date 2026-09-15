@@ -4,6 +4,10 @@
 
 namespace cfg {
 
+// Version: keep in lockstep with vcpkg.json and the README badge.
+constexpr const char* kVersion = "0.1.0";
+constexpr const char* kTitle   = "River Flyer";
+
 constexpr int   kScreenW      = 640;
 constexpr int   kScreenH      = 800;
 constexpr int   kTargetFps    = 60;
