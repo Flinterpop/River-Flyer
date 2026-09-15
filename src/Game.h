@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Audio.h"
 #include "Bullets.h"
 #include "Effects.h"
 #include "Player.h"
@@ -36,6 +37,7 @@ private:
     void DrawLives() const;
     void DrawGameOver() const;
 
+    Audio   audio_;
     Sprites sprites_;
     State   state_ {State::Playing};
     Player  player_;

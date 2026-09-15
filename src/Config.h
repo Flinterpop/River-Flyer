@@ -80,6 +80,14 @@ constexpr float kBurstSpeed      = 140.0f;                           // particle
 constexpr float kBurstParticleR  = 4.0f;
 constexpr float kBurstFlashR     = 18.0f;
 
+// Audio: the refuelling slurp is synthesised at start-up.
+constexpr int   kAudioRate      = 22050;                             // samples per second
+constexpr float kSlurpSeconds   = 0.35f;
+constexpr float kSlurpHzStart   = 220.0f;
+constexpr float kSlurpHzEnd     = 880.0f;
+constexpr float kSlurpBubbleHz  = 24.0f;                             // amplitude wobble
+constexpr float kSlurpGain      = 0.5f;
+
 // HUD.
 constexpr int   kFuelBarW     = 200;
 constexpr int   kFuelBarH     = 14;

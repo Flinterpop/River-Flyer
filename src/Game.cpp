@@ -113,6 +113,7 @@ bool Game::UpdateFuel(float dt)
     // Flying over a depot refuels without destroying it.
     const int hit = terrain_.FindObstacle(player_.Bounds());
     if (hit >= 0 && terrain_.ObstacleAt(hit).kind == Terrain::Kind::Fuel) {
+        if (fuel_ < cfg::kFuelMax) { audio_.PlaySlurp(); }   // only while actually taking fuel on
         fuel_ += cfg::kFuelRefillPerSec * dt;
     }
     if (fuel_ > cfg::kFuelMax) { fuel_ = cfg::kFuelMax; }
