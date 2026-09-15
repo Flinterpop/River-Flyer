@@ -3,7 +3,7 @@
 [![Release][release-badge]][release-latest]
 
 [release-badge]: https://img.shields.io/badge/release-v0.1.0-blue
-[release-latest]: https://github.com/Flinterpop/scroller/releases/latest
+[release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 
 *Last updated: 15 Sep 2026*
 
