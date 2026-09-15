@@ -17,6 +17,7 @@ Vector2 RectCentre(const Rectangle& r)
 
 Game::Game()
 {
+    scores_.Load();
     Restart();
 }
 
@@ -31,6 +32,8 @@ void Game::Restart()
     fuel_         = cfg::kFuelMax;
     fireCooldown_ = 0.0f;
     grace_        = 0.0f;
+    finalScore_   = 0;
+    newRow_       = -1;
     state_        = State::Playing;
     assert(!terrain_.HitsBank(player_.Bounds()));   // must spawn in open water
     assert(lives_ > 0 && fuel_ > 0.0f);
@@ -41,8 +44,9 @@ void Game::Update(float dt)
     assert(dt >= 0.0f);
     switch (state_) {
         case State::Playing:  UpdatePlaying(dt);  break;
-        case State::Crashing: UpdateCrashing(dt); break;
-        case State::GameOver: UpdateGameOver(dt); break;
+        case State::Crashing:  UpdateCrashing(dt);  break;
+        case State::EnterName: UpdateEnterName(dt); break;
+        case State::GameOver:  UpdateGameOver(dt);  break;
     }
 }
 
@@ -97,6 +101,65 @@ void Game::UpdateGameOver(float dt)
     if (IsKeyPressed(KEY_R) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
         Restart();
     }
+}
+
+void Game::FinishGame()
+{
+    assert(state_ == State::Crashing && lives_ == 0);
+    finalScore_ = Score();
+    if (scores_.Qualifies(finalScore_)) {
+        // Pre-fill with the last name used so a returning player just hits Enter.
+        nameLen_ = 0;
+        for (const char* p = scores_.LastName(); *p != '\0' && nameLen_ < cfg::kNameMax; ++p) {
+            name_[static_cast<size_t>(nameLen_)] = *p;
+            ++nameLen_;
+        }
+        name_[static_cast<size_t>(nameLen_)] = '\0';
+        audio_.Play(Audio::Sfx::Fanfare);
+        state_ = State::EnterName;
+    } else {
+        state_ = State::GameOver;
+    }
+    assert(nameLen_ >= 0 && nameLen_ <= cfg::kNameMax);
+}
+
+void Game::UpdateEnterName(float dt)
+{
+    assert(state_ == State::EnterName);
+    effects_.Update(dt);
+
+    // Typed characters: printable ASCII only, bounded per frame and in length.
+    for (int i = 0; i < cfg::kNameInputRepeatChars; ++i) {
+        const int c = GetCharPressed();
+        if (c == 0) { break; }
+        if (c >= 32 && c <= 126 && nameLen_ < cfg::kNameMax) {
+            name_[static_cast<size_t>(nameLen_)] = static_cast<char>(c);
+            ++nameLen_;
+            name_[static_cast<size_t>(nameLen_)] = '\0';
+        }
+    }
+    if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && nameLen_ > 0) {
+        --nameLen_;
+        name_[static_cast<size_t>(nameLen_)] = '\0';
+    }
+    if (IsKeyPressed(KEY_ENTER) && nameLen_ > 0) {
+        CommitName();
+    }
+    assert(nameLen_ >= 0 && nameLen_ <= cfg::kNameMax);
+}
+
+void Game::CommitName()
+{
+    assert(state_ == State::EnterName && nameLen_ > 0);
+    // Trim trailing spaces so " " alone cannot be a name.
+    while (nameLen_ > 0 && name_[static_cast<size_t>(nameLen_ - 1)] == ' ') {
+        --nameLen_;
+        name_[static_cast<size_t>(nameLen_)] = '\0';
+    }
+    if (nameLen_ == 0) { return; }
+    newRow_ = scores_.Add(name_.data(), finalScore_);
+    state_  = State::GameOver;
+    assert(newRow_ >= 0 && newRow_ < scores_.Count());
 }
 
 void Game::UpdateFiring(float dt)
@@ -181,7 +244,7 @@ void Game::LoseLife()
     assert(lives_ > 0 && state_ == State::Crashing);
     --lives_;
     if (lives_ == 0) {
-        state_ = State::GameOver;
+        FinishGame();
         return;
     }
     // Fresh plane at the start position, full tank, untouchable for a moment.
@@ -194,7 +257,7 @@ void Game::LoseLife()
 
 bool Game::PlayerVisible() const
 {
-    if (state_ == State::GameOver) { return false; }   // the plane is gone
+    if (state_ == State::GameOver || state_ == State::EnterName) { return false; }   // the plane is gone
     if (grace_ <= 0.0f) { return true; }
     // Blink at kBlinkHz while in the grace period.
     const float phase = std::fmod(grace_ * cfg::kBlinkHz, 1.0f);
@@ -222,7 +285,13 @@ void Game::DrawHud() const
     DrawText(TextFormat("SCORE %06d", Score()), 10, 10, 24, DARKBLUE);
     DrawFuelBar();
     DrawLives();
-    if (state_ == State::GameOver) { DrawGameOver(); }
+    {
+        const char* best = TextFormat("BEST %06d", scores_.Best());
+        const int   w    = MeasureText(best, 16);
+        DrawText(best, (cfg::kScreenW - w) / 2, 14, 16, DARKBLUE);
+    }
+    if (state_ == State::EnterName) { DrawEnterName(); }
+    if (state_ == State::GameOver)  { DrawGameOver(); }
 }
 
 void Game::DrawFuelBar() const
@@ -248,16 +317,72 @@ void Game::DrawLives() const
     }
 }
 
+void Game::DrawScoreTable(int x, int y) const
+{
+    assert(x >= 0 && y >= 0);
+    const int rowH = 26;
+    DrawText("TOP PILOTS", x, y, 20, RAYWHITE);
+    y += rowH + 4;
+    for (int i = 0; i < cfg::kHighScoreCount; ++i) {
+        const int   ry   = y + i * rowH;
+        const Color c    = (i == newRow_) ? GOLD : ((i < scores_.Count()) ? RAYWHITE : GRAY);
+        DrawText(TextFormat("%2d.", i + 1), x, ry, 20, c);
+        if (i < scores_.Count()) {
+            const HighScores::Entry& e = scores_.At(i);
+            DrawText(e.name.data(), x + 44, ry, 20, c);
+            DrawText(TextFormat("%06d", e.score), x + 260, ry, 20, c);
+        } else {
+            DrawText("- - -", x + 44, ry, 20, c);
+        }
+    }
+}
+
 void Game::DrawGameOver() const
 {
     assert(state_ == State::GameOver);
-    const char* msg1 = "Oh no! Out of planes!";
-    const char* msg2 = "Press SPACE to fly again";
-    const int   w1   = MeasureText(msg1, 32);
-    const int   w2   = MeasureText(msg2, 24);
-    assert(w1 > 0 && w1 < cfg::kScreenW && w2 > 0 && w2 < cfg::kScreenW);
+    const int   panelW = 400;
+    const int   panelH = 460;
+    const int   px     = (cfg::kScreenW - panelW) / 2;
+    const int   py     = (cfg::kScreenH - panelH) / 2;
+    const char* msg1   = "Oh no! Out of planes!";
+    const char* msg2   = "Press SPACE to fly again";
+    const int   w1     = MeasureText(msg1, 30);
+    const int   w2     = MeasureText(msg2, 22);
+    assert(w1 > 0 && w1 < panelW && w2 > 0 && w2 < panelW);
 
-    DrawRectangle(0, cfg::kScreenH / 2 - 50, cfg::kScreenW, 100, Fade(BLACK, 0.6f));
-    DrawText(msg1, (cfg::kScreenW - w1) / 2, cfg::kScreenH / 2 - 40, 32, GOLD);
-    DrawText(msg2, (cfg::kScreenW - w2) / 2, cfg::kScreenH / 2 + 8,  24, RAYWHITE);
+    DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.7f));
+    DrawRectangleLines(px, py, panelW, panelH, GOLD);
+    DrawText(msg1, (cfg::kScreenW - w1) / 2, py + 16, 30, GOLD);
+    DrawText(TextFormat("Your score: %06d", finalScore_), px + 30, py + 60, 20, RAYWHITE);
+    DrawScoreTable(px + 30, py + 100);
+    DrawText(msg2, (cfg::kScreenW - w2) / 2, py + panelH - 40, 22, RAYWHITE);
+}
+
+void Game::DrawEnterName() const
+{
+    assert(state_ == State::EnterName);
+    const int   panelW = 440;
+    const int   panelH = 200;
+    const int   px     = (cfg::kScreenW - panelW) / 2;
+    const int   py     = (cfg::kScreenH - panelH) / 2;
+    const char* msg1   = "NEW HIGH SCORE!";
+    const int   w1     = MeasureText(msg1, 32);
+    assert(w1 > 0 && w1 < panelW);
+
+    DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.7f));
+    DrawRectangleLines(px, py, panelW, panelH, GOLD);
+    DrawText(msg1, (cfg::kScreenW - w1) / 2, py + 16, 32, GOLD);
+    DrawText(TextFormat("%06d - type your name:", finalScore_), px + 30, py + 62, 20, RAYWHITE);
+
+    // Text box with a blinking cursor.
+    const int boxX = px + 30;
+    const int boxY = py + 92;
+    DrawRectangle(boxX, boxY, panelW - 60, 36, RAYWHITE);
+    DrawText(name_.data(), boxX + 8, boxY + 6, 24, DARKBLUE);
+    const bool blink = std::fmod(GetTime(), 1.0) < 0.5;
+    if (blink && nameLen_ < cfg::kNameMax) {
+        const int cx = boxX + 8 + MeasureText(name_.data(), 24) + 2;
+        DrawRectangle(cx, boxY + 6, 3, 24, DARKBLUE);
+    }
+    DrawText("Enter when done", px + 30, py + 144, 18, LIGHTGRAY);
 }

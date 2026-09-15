@@ -17,6 +17,7 @@ public:
         Whine,    // plane spirals into the bank / out of fuel
         Splash,   // plane hits the water
         Brake,    // drag chute hiss
+        Fanfare,  // new high score
         Count
     };
 
@@ -38,6 +39,7 @@ private:
     static Sound GenWhine();
     static Sound GenSplash();
     static Sound GenBrake();
+    static Sound GenFanfare();
 
     bool                       ready_ {false};
     std::array<Sound, kCount>  bank_ {};

@@ -77,6 +77,7 @@ Audio::Audio()
     bank_[static_cast<size_t>(Sfx::Whine)]  = GenWhine();
     bank_[static_cast<size_t>(Sfx::Splash)] = GenSplash();
     bank_[static_cast<size_t>(Sfx::Brake)]  = GenBrake();
+    bank_[static_cast<size_t>(Sfx::Fanfare)] = GenFanfare();
     assert(bank_.front().frameCount > 0 && bank_.back().frameCount > 0);
 }
 
@@ -193,6 +194,29 @@ Sound Audio::GenSplash()
         lp += 0.12f * (Noise() - lp);
         const float env = (u < 0.08f) ? (u / 0.08f) : std::exp(-4.0f * (u - 0.08f));
         g_scratch[static_cast<size_t>(i)] = lp * env * 2.2f;
+    }
+    return Commit(frames);
+}
+
+// Fanfare: three rising notes (C5 E5 G5) then a held C6, square-ish and bright.
+Sound Audio::GenFanfare()
+{
+    const float dur    = 1.1f;
+    const int   frames = FramesFor(dur);
+    const float notes[4]  = { 523.25f, 659.25f, 783.99f, 1046.5f };
+    const float starts[4] = { 0.0f, 0.18f, 0.36f, 0.54f };
+    float phase = 0.0f;
+    for (int i = 0; i < frames; ++i) {
+        const float t = TimeOf(i);
+        int n = 0;
+        for (int k = 1; k < 4; ++k) { if (t >= starts[k]) { n = k; } }
+        const float since = t - starts[n];
+        const float len   = (n == 3) ? (dur - starts[3]) : (starts[n + 1] - starts[n]);
+        const float env   = (since < 0.01f) ? (since / 0.01f) : (1.0f - since / len);
+        phase += kTwoPi * notes[n] / static_cast<float>(cfg::kAudioRate);
+        const float s = std::sin(phase);
+        const float edge = (s >= 0.0f) ? 1.0f : -1.0f;
+        g_scratch[static_cast<size_t>(i)] = (0.7f * s + 0.3f * edge) * env * 0.35f;
     }
     return Commit(frames);
 }

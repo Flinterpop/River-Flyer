@@ -109,6 +109,12 @@ constexpr float kSlurpHzEnd     = 880.0f;
 constexpr float kSlurpBubbleHz  = 24.0f;                             // amplitude wobble
 constexpr float kSlurpGain      = 0.5f;
 
+// High scores: fixed table persisted as a text file next to the exe.
+constexpr int         kHighScoreCount = 10;
+constexpr int         kNameMax        = 12;                          // characters, excluding the terminator
+constexpr const char* kHighScoreFile  = "highscores.txt";
+constexpr int         kNameInputRepeatChars = 8;                     // chars accepted per frame from the queue
+
 // HUD.
 constexpr int   kFuelBarW     = 200;
 constexpr int   kFuelBarH     = 14;

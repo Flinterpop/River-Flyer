@@ -3,6 +3,7 @@
 #include "Audio.h"
 #include "Bullets.h"
 #include "Effects.h"
+#include "HighScores.h"
 #include "Player.h"
 #include "Sprites.h"
 #include "Terrain.h"
@@ -12,7 +13,7 @@
 // CloseWindow().
 class Game {
 public:
-    enum class State { Playing, Crashing, GameOver };
+    enum class State { Playing, Crashing, EnterName, GameOver };
 
     Game();
     void Update(float dt);
@@ -22,7 +23,10 @@ private:
     void Restart();
     void UpdatePlaying(float dt);
     void UpdateCrashing(float dt);
+    void UpdateEnterName(float dt);
     void UpdateGameOver(float dt);
+    void FinishGame();               // Crashing -> EnterName or GameOver
+    void CommitName();
     void UpdateFiring(float dt);
     bool UpdateFuel(float dt);            // true when the tank has just run dry
     void ResolveBulletHits();
@@ -36,6 +40,8 @@ private:
     void DrawFuelBar() const;
     void DrawLives() const;
     void DrawGameOver() const;
+    void DrawEnterName() const;
+    void DrawScoreTable(int x, int y) const;
 
     Audio   audio_;
     Sprites sprites_;
@@ -43,11 +49,17 @@ private:
     Player  player_;
     Bullets bullets_;
     Terrain terrain_;
-    Effects effects_;
+    Effects    effects_;
+    HighScores scores_;
 
     int   lives_        {0};
     int   kills_        {0};
     float fuel_         {0.0f};
     float fireCooldown_ {0.0f};   // seconds until the next shot is allowed
     float grace_        {0.0f};   // seconds of invulnerability left after a respawn
+    int   finalScore_   {0};      // frozen at the moment the last plane is lost
+    int   newRow_       {-1};     // row of the entry just added, or -1
+
+    std::array<char, cfg::kNameMax + 1> name_ {};   // name being typed (NUL-terminated)
+    int   nameLen_      {0};
 };

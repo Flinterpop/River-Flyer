@@ -20,6 +20,7 @@ Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-late
 | W A S D / arrows | Fly. Up lights the afterburner, down pops a drag chute that slows the river |
 | Space | Shoot. Rocks and fuel pumps both go down for 100 points |
 | Space / R / Enter | Fly again after losing the last plane |
+| Letters, Backspace, Enter | Type your name when you make the top ten |
 | F12 | Save `screenshotNNN.png` next to the exe |
 | Esc | Quit |
 
@@ -28,6 +29,7 @@ Notes:
 - Fuel burns steadily and the bar top-left goes red below a quarter. Fly over a red **FUEL** pump to refill; you keep refilling as long as you sit on it.
 - Score is distance plus 100 per kill. The river speeds up gently with distance, to at most double speed.
 - Hitting a rock rolls the plane into the water; hitting the bank or running dry spirals it in. Either way it costs one plane.
+- Top-ten scores with names are kept in `highscores.txt` next to the exe (delete it to start fresh). The name box remembers the last name typed, so a returning player just presses Enter. `BEST` at the top of the screen is the current record.
 
 ## Build
 
@@ -61,7 +63,8 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Bullets.*` | Fixed bullet pool |
 | `src/Effects.*` | Fixed pool of particle bursts (rock, fuel, plane, splash) |
 | `src/Sprites.*` | Textures drawn procedurally at start-up; swap for `LoadTexture()` when real art exists |
-| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake |
+| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare |
+| `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |
 
 Notes:
 
