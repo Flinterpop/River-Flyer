@@ -1,9 +1,11 @@
 # River Flyer
 
-[![Release][release-badge]][release-latest]
+[![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
 
 [release-badge]: https://img.shields.io/badge/release-v0.1.0-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
+[license-badge]: https://img.shields.io/badge/license-MIT-green
+[license]: LICENSE
 
 *Last updated: 15 Sep 2026*
 
@@ -76,3 +78,7 @@ git push origin main v0.1.0
 Compress-Archive build\Release\scroller.exe RiverFlyer-v0.1.0-win64.zip
 gh release create v0.1.0 RiverFlyer-v0.1.0-win64.zip --title "v0.1.0" --notes-file notes.md
 ```
+
+## License
+
+[MIT](LICENSE). raylib itself is zlib/libpng licensed; the overlay port under `vcpkg-overlays/raylib` derives from the MIT-licensed vcpkg port.
