@@ -11,6 +11,9 @@
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
+
+<img width="642" height="846" alt="image" src="https://github.com/user-attachments/assets/6c0fc587-461e-4f39-81a9-b7c3d45606c8" />
+
 ## Play
 
 Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-latest], unzip, run `scroller.exe`. It is a single static exe with no installer and nothing else to install.
