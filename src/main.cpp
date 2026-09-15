@@ -19,7 +19,6 @@ int main()
             const float dt = (GetFrameTime() < 0.1f) ? GetFrameTime() : 0.1f;
             assert(dt >= 0.0f && dt <= 0.1f);
             game.Update(dt);
-            if (IsKeyPressed(KEY_F12)) { TakeScreenshot("screenshot.png"); }   // saved next to the exe
 
             BeginDrawing();
             ClearBackground(BLACK);

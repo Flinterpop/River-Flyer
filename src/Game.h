@@ -1,15 +1,17 @@
 #pragma once
 
 #include "Bullets.h"
+#include "Effects.h"
 #include "Player.h"
 #include "Sprites.h"
 #include "Terrain.h"
 
-// Top-level game state machine. Owns the player, bullets, terrain and sprites.
-// Must be constructed after InitWindow() and destroyed before CloseWindow().
+// Top-level game state machine. Owns the player, bullets, terrain, effects
+// and sprites. Must be constructed after InitWindow() and destroyed before
+// CloseWindow().
 class Game {
 public:
-    enum class State { Playing, GameOver };
+    enum class State { Playing, Crashing, GameOver };
 
     Game();
     void Update(float dt);
@@ -18,11 +20,13 @@ public:
 private:
     void Restart();
     void UpdatePlaying(float dt);
-    void UpdateGameOver();
+    void UpdateCrashing(float dt);
+    void UpdateGameOver(float dt);
     void UpdateFiring(float dt);
-    void UpdateFuel(float dt);
+    bool UpdateFuel(float dt);            // true when the tank has just run dry
     void ResolveBulletHits();
-    void ResolvePlayerHits();
+    void CheckPlayerCrash();
+    void BeginCrash();
     void LoseLife();
     bool PlayerVisible() const;
     int  Score() const;
@@ -37,6 +41,7 @@ private:
     Player  player_;
     Bullets bullets_;
     Terrain terrain_;
+    Effects effects_;
 
     int   lives_        {0};
     int   kills_        {0};

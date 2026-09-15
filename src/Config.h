@@ -56,6 +56,29 @@ constexpr int   kLives            = 3;
 constexpr float kGraceSeconds     = 2.0f;
 constexpr float kBlinkHz          = 8.0f;
 
+// Afterburner flame drawn while climbing.
+constexpr float kFlameLen     = 26.0f;                               // base length below the tail
+constexpr float kFlameFlicker = 10.0f;                               // +/- length variation
+constexpr float kFlameHz      = 30.0f;
+
+// Spiral crash animation.
+constexpr float kCrashSeconds = 1.2f;
+constexpr float kCrashTurns   = 3.0f;                                // full rotations over the spiral
+constexpr float kCrashRadius  = 30.0f;                               // peak spiral radius, px
+constexpr float kCrashDrift   = 80.0f;                               // downstream drift over the spiral, px
+constexpr float kCrashMinScale = 0.25f;                              // sprite scale at the end
+constexpr int   kCrashPuffs    = 6;                                  // smoke puffs trailing the spiral
+constexpr float kCrashPuffGap  = 0.04f;                              // progress between puffs
+constexpr float kCrashPuffR    = 7.0f;
+
+// Explosion bursts: fixed pool, fixed particle count per burst.
+constexpr int   kMaxBursts       = 8;
+constexpr int   kBurstParticles  = 12;
+constexpr float kBurstSeconds    = 0.6f;
+constexpr float kBurstSpeed      = 140.0f;                           // particle speed, px per second
+constexpr float kBurstParticleR  = 4.0f;
+constexpr float kBurstFlashR     = 18.0f;
+
 // HUD.
 constexpr int   kFuelBarW     = 200;
 constexpr int   kFuelBarH     = 14;

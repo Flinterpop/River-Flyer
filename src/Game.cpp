@@ -5,6 +5,16 @@
 
 #include "Config.h"
 
+namespace {
+
+Vector2 RectCentre(const Rectangle& r)
+{
+    assert(r.width > 0.0f && r.height > 0.0f);
+    return Vector2 {r.x + r.width * 0.5f, r.y + r.height * 0.5f};
+}
+
+} // namespace
+
 Game::Game()
 {
     Restart();
@@ -15,6 +25,7 @@ void Game::Restart()
     player_.Reset();
     bullets_.Reset();
     terrain_.Reset();
+    effects_.Reset();
     lives_        = cfg::kLives;
     kills_        = 0;
     fuel_         = cfg::kFuelMax;
@@ -29,8 +40,9 @@ void Game::Update(float dt)
 {
     assert(dt >= 0.0f);
     switch (state_) {
-        case State::Playing:  UpdatePlaying(dt); break;
-        case State::GameOver: UpdateGameOver();  break;
+        case State::Playing:  UpdatePlaying(dt);  break;
+        case State::Crashing: UpdateCrashing(dt); break;
+        case State::GameOver: UpdateGameOver(dt); break;
     }
 }
 
@@ -40,21 +52,42 @@ void Game::UpdatePlaying(float dt)
     terrain_.Update(dt);
     player_.Update(dt);
     bullets_.Update(dt);
+    effects_.Update(dt);
     UpdateFiring(dt);
-    UpdateFuel(dt);
     ResolveBulletHits();
 
     if (grace_ > 0.0f) {
         grace_ -= dt;
     } else {
-        ResolvePlayerHits();
+        CheckPlayerCrash();
     }
-    assert(lives_ >= 0);
+    if (state_ == State::Playing && UpdateFuel(dt)) {
+        BeginCrash();
+    }
+    assert(lives_ > 0);
 }
 
-void Game::UpdateGameOver()
+void Game::UpdateCrashing(float dt)
+{
+    assert(state_ == State::Crashing);
+    // The river keeps flowing and shots keep travelling; only the plane is scripted.
+    terrain_.Update(dt);
+    bullets_.Update(dt);
+    effects_.Update(dt);
+    ResolveBulletHits();
+    player_.UpdateCrash(dt);
+
+    if (player_.CrashFinished()) {
+        effects_.Spawn(player_.Centre(), Effects::Style::Plane);
+        LoseLife();
+    }
+    assert(state_ != State::Crashing || player_.Crashing());
+}
+
+void Game::UpdateGameOver(float dt)
 {
     assert(state_ == State::GameOver);
+    effects_.Update(dt);   // let the final explosion finish
     if (IsKeyPressed(KEY_R) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
         Restart();
     }
@@ -72,7 +105,7 @@ void Game::UpdateFiring(float dt)
     assert(fireCooldown_ <= cfg::kFireCooldown);
 }
 
-void Game::UpdateFuel(float dt)
+bool Game::UpdateFuel(float dt)
 {
     assert(dt >= 0.0f);
     fuel_ -= cfg::kFuelBurnPerSec * dt;
@@ -83,12 +116,10 @@ void Game::UpdateFuel(float dt)
         fuel_ += cfg::kFuelRefillPerSec * dt;
     }
     if (fuel_ > cfg::kFuelMax) { fuel_ = cfg::kFuelMax; }
+    if (fuel_ < 0.0f)          { fuel_ = 0.0f; }
 
-    if (fuel_ <= 0.0f) {
-        LoseLife();
-        fuel_ = cfg::kFuelMax;   // the new craft arrives with a full tank
-    }
-    assert(fuel_ > 0.0f && fuel_ <= cfg::kFuelMax);
+    assert(fuel_ >= 0.0f && fuel_ <= cfg::kFuelMax);
+    return fuel_ <= 0.0f;
 }
 
 void Game::ResolveBulletHits()
@@ -98,6 +129,11 @@ void Game::ResolveBulletHits()
         if (!bullets_.Active(b)) { continue; }
         const int hit = terrain_.FindObstacle(bullets_.Bounds(b));
         if (hit < 0) { continue; }
+
+        const Terrain::Obstacle& o = terrain_.ObstacleAt(hit);
+        const Effects::Style style = (o.kind == Terrain::Kind::Rock) ? Effects::Style::Rock
+                                                                     : Effects::Style::Fuel;
+        effects_.Spawn(RectCentre(o.rect), style);
         terrain_.RemoveObstacle(hit);
         bullets_.Kill(b);
         ++kills_;
@@ -105,35 +141,49 @@ void Game::ResolveBulletHits()
     assert(kills_ >= 0);
 }
 
-void Game::ResolvePlayerHits()
+void Game::CheckPlayerCrash()
 {
-    assert(grace_ <= 0.0f);
+    assert(grace_ <= 0.0f && state_ == State::Playing);
     const Rectangle box = player_.Bounds();
     const int       hit = terrain_.FindObstacle(box);
     const bool rock = (hit >= 0) && (terrain_.ObstacleAt(hit).kind == Terrain::Kind::Rock);
-    if (rock || terrain_.HitsBank(box)) {
-        if (rock) { terrain_.RemoveObstacle(hit); }
-        LoseLife();
+
+    if (rock) {
+        effects_.Spawn(RectCentre(terrain_.ObstacleAt(hit).rect), Effects::Style::Rock);
+        terrain_.RemoveObstacle(hit);
+        BeginCrash();
+    } else if (terrain_.HitsBank(box)) {
+        BeginCrash();
     }
+}
+
+void Game::BeginCrash()
+{
+    assert(state_ == State::Playing);
+    player_.BeginCrash();
+    state_ = State::Crashing;
+    assert(player_.Crashing());
 }
 
 void Game::LoseLife()
 {
-    assert(lives_ > 0);
+    assert(lives_ > 0 && state_ == State::Crashing);
     --lives_;
     if (lives_ == 0) {
         state_ = State::GameOver;
         return;
     }
-    // Respawn in place but untouchable for a moment; the river keeps flowing
-    // so the player does not get stuck against a bank forever.
+    // Fresh plane at the start position, full tank, untouchable for a moment.
     player_.Reset();
+    fuel_  = cfg::kFuelMax;
     grace_ = cfg::kGraceSeconds;
-    assert(grace_ > 0.0f);
+    state_ = State::Playing;
+    assert(grace_ > 0.0f && !player_.Crashing());
 }
 
 bool Game::PlayerVisible() const
 {
+    if (state_ == State::GameOver) { return false; }   // the plane is gone
     if (grace_ <= 0.0f) { return true; }
     // Blink at kBlinkHz while in the grace period.
     const float phase = std::fmod(grace_ * cfg::kBlinkHz, 1.0f);
@@ -152,6 +202,7 @@ void Game::Draw() const
     terrain_.Draw(sprites_);
     bullets_.Draw(sprites_.Bullet());
     player_.Draw(sprites_.Player(), PlayerVisible());
+    effects_.Draw();
     DrawHud();
 }
 
