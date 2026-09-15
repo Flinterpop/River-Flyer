@@ -49,8 +49,11 @@ void Game::Update(float dt)
 void Game::UpdatePlaying(float dt)
 {
     assert(state_ == State::Playing);
-    terrain_.Update(dt);
     player_.Update(dt);
+    // The drag chute holds the plane back: the river passes more slowly.
+    const float riverDt = player_.Braking() ? dt * cfg::kBrakeScrollMult : dt;
+    terrain_.Update(riverDt);
+    if (player_.Braking()) { audio_.Sustain(Audio::Sfx::Brake); }
     bullets_.Update(dt);
     effects_.Update(dt);
     UpdateFiring(dt);
@@ -62,7 +65,8 @@ void Game::UpdatePlaying(float dt)
         CheckPlayerCrash();
     }
     if (state_ == State::Playing && UpdateFuel(dt)) {
-        BeginCrash();
+        audio_.Play(Audio::Sfx::Whine);
+        BeginCrash(Player::CrashStyle::Spiral);   // out of fuel: glide down in a spiral
     }
     assert(lives_ > 0);
 }
@@ -78,7 +82,9 @@ void Game::UpdateCrashing(float dt)
     player_.UpdateCrash(dt);
 
     if (player_.CrashFinished()) {
-        effects_.Spawn(player_.Centre(), Effects::Style::Plane);
+        const bool roll = (player_.Style() == Player::CrashStyle::Roll);
+        effects_.Spawn(player_.Centre(), roll ? Effects::Style::Splash : Effects::Style::Plane);
+        audio_.Play(roll ? Audio::Sfx::Splash : Audio::Sfx::Crunch);
         LoseLife();
     }
     assert(state_ != State::Crashing || player_.Crashing());
@@ -100,6 +106,7 @@ void Game::UpdateFiring(float dt)
     if (fireCooldown_ > 0.0f) { return; }
     if (IsKeyDown(KEY_SPACE)) {
         bullets_.Fire(player_.Muzzle());
+        audio_.Play(Audio::Sfx::Shoot);
         fireCooldown_ = cfg::kFireCooldown;
     }
     assert(fireCooldown_ <= cfg::kFireCooldown);
@@ -113,7 +120,7 @@ bool Game::UpdateFuel(float dt)
     // Flying over a depot refuels without destroying it.
     const int hit = terrain_.FindObstacle(player_.Bounds());
     if (hit >= 0 && terrain_.ObstacleAt(hit).kind == Terrain::Kind::Fuel) {
-        if (fuel_ < cfg::kFuelMax) { audio_.PlaySlurp(); }   // only while actually taking fuel on
+        if (fuel_ < cfg::kFuelMax) { audio_.Sustain(Audio::Sfx::Slurp); }   // only while actually taking fuel on
         fuel_ += cfg::kFuelRefillPerSec * dt;
     }
     if (fuel_ > cfg::kFuelMax) { fuel_ = cfg::kFuelMax; }
@@ -135,6 +142,7 @@ void Game::ResolveBulletHits()
         const Effects::Style style = (o.kind == Terrain::Kind::Rock) ? Effects::Style::Rock
                                                                      : Effects::Style::Fuel;
         effects_.Spawn(RectCentre(o.rect), style);
+        audio_.Play(Audio::Sfx::Pop);
         terrain_.RemoveObstacle(hit);
         bullets_.Kill(b);
         ++kills_;
@@ -152,16 +160,18 @@ void Game::CheckPlayerCrash()
     if (rock) {
         effects_.Spawn(RectCentre(terrain_.ObstacleAt(hit).rect), Effects::Style::Rock);
         terrain_.RemoveObstacle(hit);
-        BeginCrash();
+        audio_.Play(Audio::Sfx::Crunch);
+        BeginCrash(Player::CrashStyle::Roll);
     } else if (terrain_.HitsBank(box)) {
-        BeginCrash();
+        audio_.Play(Audio::Sfx::Whine);
+        BeginCrash(Player::CrashStyle::Spiral);
     }
 }
 
-void Game::BeginCrash()
+void Game::BeginCrash(Player::CrashStyle style)
 {
     assert(state_ == State::Playing);
-    player_.BeginCrash();
+    player_.BeginCrash(style);
     state_ = State::Crashing;
     assert(player_.Crashing());
 }

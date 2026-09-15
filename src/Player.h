@@ -19,26 +19,39 @@ public:
     // Where bullets leave the craft (nose, top centre).
     Vector2 Muzzle() const;
 
+    // Down key held this frame (drag chute out).
+    bool Braking() const { return braking_; }
+
     // Centre of the sprite as currently drawn (valid in both modes).
     Vector2 Centre() const;
 
-    // Spiral crash: call BeginCrash(), then UpdateCrash() each frame until
-    // CrashFinished() reports true.
-    void BeginCrash();
+    // Two scripted crashes: Spiral (bank hit: tumbles in a shrinking spiral)
+    // and Roll (rock hit: barrel-rolls, spews smoke, then sinks). Call
+    // BeginCrash(), then UpdateCrash() each frame until CrashFinished().
+    enum class CrashStyle { Spiral, Roll };
+    void BeginCrash(CrashStyle style);
     void UpdateCrash(float dt);
     bool Crashing() const { return crashT_ >= 0.0f; }
-    bool CrashFinished() const { return crashT_ >= cfg::kCrashSeconds; }
+    bool CrashFinished() const { return crashT_ >= CrashSeconds(); }
+    CrashStyle Style() const { return crashStyle_; }
 
 private:
     void DrawFlying(const Texture2D& tex) const;
     void DrawFlame() const;
-    void DrawCrashing(const Texture2D& tex) const;
+    void DrawChute() const;
+    float CrashSeconds() const;                  // duration of the current crash style
     float CrashProgress() const;                 // 0 .. 1
-    Vector2 CentreAt(float t) const;             // spiral position at crash progress t
-    void DrawSmokeTrail() const;
+    Vector2 CentreAt(float t) const;             // crash-path position at progress t
+    void DrawSpiral(const Texture2D& tex) const;
+    void DrawSpiralSmoke() const;
+    void DrawRoll(const Texture2D& tex) const;
+    void DrawRollSmoke() const;
 
     Vector2 pos_       {0.0f, 0.0f};             // top-left corner while flying
     bool    thrusting_ {false};                  // up key held this frame
+    bool    braking_   {false};                  // down key held this frame
+    float   chute_     {0.0f};                   // chute inflation 0 .. 1
     float   crashT_    {-1.0f};                  // seconds into the crash, or -1 when flying
+    CrashStyle crashStyle_ {CrashStyle::Spiral};
     Vector2 crashOrigin_ {0.0f, 0.0f};           // sprite centre where the crash began
 };

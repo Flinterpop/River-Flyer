@@ -27,7 +27,7 @@ private:
     bool UpdateFuel(float dt);            // true when the tank has just run dry
     void ResolveBulletHits();
     void CheckPlayerCrash();
-    void BeginCrash();
+    void BeginCrash(Player::CrashStyle style);
     void LoseLife();
     bool PlayerVisible() const;
     int  Score() const;

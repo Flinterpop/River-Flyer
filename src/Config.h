@@ -37,6 +37,7 @@ constexpr float kPlayerH      = 40.0f;
 constexpr float kPlayerSpeedX = 300.0f;                              // px per second
 constexpr float kPlayerSpeedY = 220.0f;
 constexpr float kPlayerStartY = kScreenH - 120.0f;
+constexpr float kPlayerBottomMargin = 40.0f;                         // room below the tail for the flame / chute
 
 // Bullets.
 constexpr int   kMaxBullets   = 16;
@@ -62,6 +63,12 @@ constexpr float kFlameLen     = 26.0f;                               // base len
 constexpr float kFlameFlicker = 10.0f;                               // +/- length variation
 constexpr float kFlameHz      = 30.0f;
 
+// Drag chute while braking (down key).
+constexpr float kChuteInflate    = 0.2f;                             // seconds to fully open
+constexpr float kChuteRadius     = 15.0f;                            // canopy radius when open
+constexpr float kChuteLineLen    = 22.0f;                            // shroud line length from the tail
+constexpr float kBrakeScrollMult = 0.6f;                             // river speed while braking
+
 // Spiral crash animation.
 constexpr float kCrashSeconds = 1.2f;
 constexpr float kCrashTurns   = 3.0f;                                // full rotations over the spiral
@@ -71,6 +78,16 @@ constexpr float kCrashMinScale = 0.25f;                              // sprite s
 constexpr int   kCrashPuffs    = 6;                                  // smoke puffs trailing the spiral
 constexpr float kCrashPuffGap  = 0.04f;                              // progress between puffs
 constexpr float kCrashPuffR    = 7.0f;
+
+// Roll crash (rock hit): barrel-roll, smoke, then sink into the water.
+constexpr float kRollSeconds   = 1.4f;
+constexpr float kRollTurns     = 3.0f;                               // barrel rolls before hitting the water
+constexpr float kRollDrift     = 110.0f;                             // downstream drift over the roll, px
+constexpr float kRollWobbleDeg = 12.0f;                              // yaw wobble amplitude
+constexpr float kRollSinkAt    = 0.75f;                              // progress at which it hits the water
+constexpr int   kRollPuffs     = 8;
+constexpr float kRollPuffGap   = 0.035f;
+constexpr float kRollPuffRise  = 6.0f;                               // px each puff lags behind the tail per step
 
 // Explosion bursts: fixed pool, fixed particle count per burst.
 constexpr int   kMaxBursts       = 8;

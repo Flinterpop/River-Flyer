@@ -31,9 +31,11 @@ file(GLOB vendored_headers RELATIVE "${SOURCE_PATH}/src/external"
     "${SOURCE_PATH}/src/external/s*fl.h"  # from mmx
     "${SOURCE_PATH}/src/external/stb_*"
 )
+# Keep the miniaudio.h that raylib 6.0 ships (0.11.24): raylib's mixer is
+# silent on Windows/WASAPI when built against the newer one from the vcpkg
+# miniaudio port, even though the device initialises and reports playback.
 file(GLOB vendored_audio_headers RELATIVE "${SOURCE_PATH}/src/external"
     "${SOURCE_PATH}/src/external/dr_*.h"
-    "${SOURCE_PATH}/src/external/miniaudio.h"
 )
 set(optional_vendored_headers
     "stb_image_resize2.h"  # not yet in vcpkg

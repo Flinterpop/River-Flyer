@@ -48,6 +48,7 @@ Color Effects::Tint(Style style)
         case Style::Rock:  return LIGHTGRAY;
         case Style::Fuel:  return ORANGE;
         case Style::Plane: return GOLD;
+        case Style::Splash: return RAYWHITE;
     }
     assert(false && "unhandled Style");
     return WHITE;

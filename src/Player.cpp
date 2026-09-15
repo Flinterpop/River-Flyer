@@ -38,6 +38,8 @@ void Player::Reset()
     pos_.x     = (static_cast<float>(cfg::kScreenW) - cfg::kPlayerW) * 0.5f;
     pos_.y     = cfg::kPlayerStartY;
     thrusting_ = false;
+    braking_   = false;
+    chute_     = 0.0f;
     crashT_    = -1.0f;
     assert(pos_.x >= 0.0f && pos_.y >= 0.0f);
     assert(!Crashing());
@@ -49,12 +51,17 @@ void Player::Update(float dt)
     assert(!Crashing());
     const Vector2 dir = ReadInput();
     thrusting_ = (dir.y < 0.0f);
+    braking_   = (dir.y > 0.0f);
+
+    // Chute inflates while braking and collapses quickly when released.
+    chute_ += braking_ ? (dt / cfg::kChuteInflate) : (-dt / (cfg::kChuteInflate * 0.5f));
+    chute_  = Clamp(chute_, 0.0f, 1.0f);
 
     pos_.x += dir.x * cfg::kPlayerSpeedX * dt;
     pos_.y += dir.y * cfg::kPlayerSpeedY * dt;
 
     pos_.x = Clamp(pos_.x, 0.0f, static_cast<float>(cfg::kScreenW) - cfg::kPlayerW);
-    pos_.y = Clamp(pos_.y, 0.0f, static_cast<float>(cfg::kScreenH) - cfg::kPlayerH);
+    pos_.y = Clamp(pos_.y, 0.0f, static_cast<float>(cfg::kScreenH) - cfg::kPlayerH - cfg::kPlayerBottomMargin);
 
     assert(pos_.x + cfg::kPlayerW <= static_cast<float>(cfg::kScreenW));
     assert(pos_.y + cfg::kPlayerH <= static_cast<float>(cfg::kScreenH));
@@ -62,12 +69,15 @@ void Player::Update(float dt)
 
 // ---- crash ----------------------------------------------------------------
 
-void Player::BeginCrash()
+void Player::BeginCrash(CrashStyle style)
 {
     assert(!Crashing());
     crashOrigin_ = Centre();
+    crashStyle_  = style;
     crashT_      = 0.0f;
     thrusting_   = false;
+    braking_     = false;
+    chute_       = 0.0f;
     assert(Crashing() && !CrashFinished());
 }
 
@@ -76,14 +86,19 @@ void Player::UpdateCrash(float dt)
     assert(dt >= 0.0f);
     assert(Crashing());
     crashT_ += dt;
-    if (crashT_ > cfg::kCrashSeconds) { crashT_ = cfg::kCrashSeconds; }
-    assert(crashT_ <= cfg::kCrashSeconds);
+    if (crashT_ > CrashSeconds()) { crashT_ = CrashSeconds(); }
+    assert(crashT_ <= CrashSeconds());
+}
+
+float Player::CrashSeconds() const
+{
+    return (crashStyle_ == CrashStyle::Roll) ? cfg::kRollSeconds : cfg::kCrashSeconds;
 }
 
 float Player::CrashProgress() const
 {
     assert(Crashing());
-    const float t = crashT_ / cfg::kCrashSeconds;
+    const float t = crashT_ / CrashSeconds();
     assert(t >= 0.0f && t <= 1.0f);
     return t;
 }
@@ -100,6 +115,11 @@ Vector2 Player::CentreAt(float t) const
 {
     assert(Crashing());
     assert(t >= 0.0f && t <= 1.0f);
+    if (crashStyle_ == CrashStyle::Roll) {
+        // Roll: carried straight downstream with a slight sideways wobble.
+        const float sway = 10.0f * std::sin(kTwoPi * 1.5f * t);
+        return Vector2 {crashOrigin_.x + sway, crashOrigin_.y + cfg::kRollDrift * t};
+    }
     // Spiral: radius swells then collapses (sin), angle winds kCrashTurns
     // times, and the whole thing drifts downstream with the river.
     const float angle  = kTwoPi * cfg::kCrashTurns * t;
@@ -115,18 +135,39 @@ void Player::Draw(const Texture2D& tex, bool visible) const
 {
     assert(tex.id != 0);
     if (!visible) { return; }   // blink frame during the respawn grace period
-    if (Crashing()) {
-        DrawCrashing(tex);
-    } else {
+    if (!Crashing()) {
         DrawFlying(tex);
+    } else if (crashStyle_ == CrashStyle::Roll) {
+        DrawRoll(tex);
+    } else {
+        DrawSpiral(tex);
     }
 }
 
 void Player::DrawFlying(const Texture2D& tex) const
 {
     assert(!Crashing());
-    if (thrusting_) { DrawFlame(); }   // behind the sprite
+    if (thrusting_)    { DrawFlame(); }   // behind the sprite
+    if (chute_ > 0.0f) { DrawChute(); }
     DrawTexture(tex, static_cast<int>(pos_.x), static_cast<int>(pos_.y), WHITE);
+}
+
+void Player::DrawChute() const
+{
+    assert(chute_ > 0.0f && chute_ <= 1.0f);
+    // Canopy trails behind (below) the tail on two shroud lines and sways.
+    const float sway  = 3.0f * std::sin(static_cast<float>(GetTime()) * 7.0f);
+    const float r     = cfg::kChuteRadius * chute_;
+    const Vector2 tail   {pos_.x + cfg::kPlayerW * 0.5f, pos_.y + cfg::kPlayerH - 2.0f};
+    const Vector2 canopy {tail.x + sway, tail.y + cfg::kChuteLineLen * chute_};
+    assert(r > 0.0f);
+
+    DrawLineV(tail, Vector2 {canopy.x - r, canopy.y}, DARKGRAY);
+    DrawLineV(tail, Vector2 {canopy.x + r, canopy.y}, DARKGRAY);
+    // Lower half-disc = the dome bulging away from the plane, with white stripes.
+    DrawCircleSector(canopy, r, 0.0f, 180.0f, 16, RED);
+    DrawCircleSector(canopy, r, 30.0f, 60.0f, 4, RAYWHITE);
+    DrawCircleSector(canopy, r, 120.0f, 150.0f, 4, RAYWHITE);
 }
 
 void Player::DrawFlame() const
@@ -145,9 +186,9 @@ void Player::DrawFlame() const
     DrawTriangle(Vector2 {cx - halfW * 0.5f, tail}, Vector2 {cx, tail + len * 0.6f}, Vector2 {cx + halfW * 0.5f, tail}, YELLOW);
 }
 
-void Player::DrawSmokeTrail() const
+void Player::DrawSpiralSmoke() const
 {
-    assert(Crashing());
+    assert(Crashing() && crashStyle_ == CrashStyle::Spiral);
     const float t = CrashProgress();
     // Puffs sit where the plane was a few steps ago; older ones are bigger and fainter.
     for (int k = 1; k <= cfg::kCrashPuffs; ++k) {
@@ -158,10 +199,10 @@ void Player::DrawSmokeTrail() const
     }
 }
 
-void Player::DrawCrashing(const Texture2D& tex) const
+void Player::DrawSpiral(const Texture2D& tex) const
 {
-    assert(Crashing());
-    DrawSmokeTrail();
+    assert(Crashing() && crashStyle_ == CrashStyle::Spiral);
+    DrawSpiralSmoke();
     const float t     = CrashProgress();
     const float scale = 1.0f - (1.0f - cfg::kCrashMinScale) * t;
     const float rot   = 360.0f * cfg::kCrashTurns * t * 1.5f;   // spins faster than it orbits
@@ -173,6 +214,52 @@ void Player::DrawCrashing(const Texture2D& tex) const
     const Rectangle src {0.0f, 0.0f, static_cast<float>(tex.width), static_cast<float>(tex.height)};
     const Rectangle dst {c.x, c.y, w, h};
     DrawTexturePro(tex, src, dst, Vector2 {w * 0.5f, h * 0.5f}, rot, Fade(WHITE, 1.0f - 0.5f * t));
+}
+
+void Player::DrawRollSmoke() const
+{
+    assert(Crashing() && crashStyle_ == CrashStyle::Roll);
+    const float t = CrashProgress();
+    // Dark smoke streams off the tail and is left behind (down-screen) as the
+    // plane keeps going; older puffs sit further back and spread out.
+    for (int k = 1; k <= cfg::kRollPuffs; ++k) {
+        const float back = t - cfg::kRollPuffGap * static_cast<float>(k);
+        if (back < 0.0f) { break; }
+        const float age = static_cast<float>(k) / static_cast<float>(cfg::kRollPuffs);   // 0 .. 1
+        Vector2 p = CentreAt(back);
+        p.y += cfg::kPlayerH * 0.5f + cfg::kRollPuffRise * static_cast<float>(k);
+        p.x += 4.0f * std::sin(static_cast<float>(k) * 1.7f);    // ragged edge
+        DrawCircleV(p, cfg::kCrashPuffR * (0.5f + 1.2f * age), Fade(DARKGRAY, 0.7f * (1.0f - age)));
+    }
+}
+
+void Player::DrawRoll(const Texture2D& tex) const
+{
+    assert(Crashing() && crashStyle_ == CrashStyle::Roll);
+    const float t = CrashProgress();
+    // Smoke only while airborne; it stops once the plane hits the water.
+    if (t < cfg::kRollSinkAt) { DrawRollSmoke(); }
+
+    // Barrel roll: sprite width follows cos(roll) so it appears to turn about
+    // its own length; a small yaw wobble sells the loss of control.
+    const float roll   = kTwoPi * cfg::kRollTurns * t;
+    float       squash = std::fabs(std::cos(roll));
+    if (squash < 0.15f) { squash = 0.15f; }
+    const float yaw = cfg::kRollWobbleDeg * std::sin(kTwoPi * 2.0f * t);
+
+    // After hitting the water: shrink and fade to nothing (sinking).
+    float sink = 0.0f;
+    if (t > cfg::kRollSinkAt) { sink = (t - cfg::kRollSinkAt) / (1.0f - cfg::kRollSinkAt); }
+    assert(sink >= 0.0f && sink <= 1.0f);
+    const float scale = 1.0f - 0.8f * sink;
+    const float alpha = 1.0f - sink;
+
+    const Vector2   c   = Centre();
+    const float     w   = cfg::kPlayerW * squash * scale;
+    const float     h   = cfg::kPlayerH * scale;
+    const Rectangle src {0.0f, 0.0f, static_cast<float>(tex.width), static_cast<float>(tex.height)};
+    const Rectangle dst {c.x, c.y, w, h};
+    DrawTexturePro(tex, src, dst, Vector2 {w * 0.5f, h * 0.5f}, yaw, Fade(WHITE, alpha));
 }
 
 // ---- geometry -------------------------------------------------------------

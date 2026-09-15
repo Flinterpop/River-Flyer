@@ -10,7 +10,7 @@
 // central flash plus kBurstParticles debris dots flying outward and fading.
 class Effects {
 public:
-    enum class Style { Rock, Fuel, Plane };
+    enum class Style { Rock, Fuel, Plane, Splash };
 
     void Reset();
     void Spawn(Vector2 centre, Style style);   // silently dropped if the pool is full
