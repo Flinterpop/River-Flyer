@@ -51,6 +51,7 @@ private:
     void      TrySpawnObstacle(const Strip& strip);
     void      PlaceObstacle(const Strip& strip, Kind kind);
     Rectangle StripRect(int index) const;
+    static void DrawFuelLabel(const Rectangle& depot);
     bool      HitsBankStrip(const Rectangle& r, int index) const;
 
     std::array<Strip, cfg::kStripCount>          strips_ {};

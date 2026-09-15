@@ -151,7 +151,20 @@ void Terrain::Draw(const Sprites& sprites) const
         if (!o.active) { continue; }
         const Texture2D& tex = (o.kind == Kind::Rock) ? sprites.Rock() : sprites.Fuel();
         DrawTexture(tex, static_cast<int>(o.rect.x), static_cast<int>(o.rect.y), WHITE);
+        if (o.kind == Kind::Fuel) { DrawFuelLabel(o.rect); }
     }
+}
+
+void Terrain::DrawFuelLabel(const Rectangle& depot)
+{
+    // Caption centred above the pump, with a dark shadow so it reads on the water.
+    const char* text = "FUEL";
+    const int   tw   = MeasureText(text, cfg::kFuelLabelSize);
+    assert(tw > 0 && tw < cfg::kScreenW);
+    const int x = static_cast<int>(depot.x + depot.width * 0.5f) - tw / 2;
+    const int y = static_cast<int>(depot.y) - cfg::kFuelLabelSize - 2;
+    DrawText(text, x + 1, y + 1, cfg::kFuelLabelSize, DARKBLUE);
+    DrawText(text, x,     y,     cfg::kFuelLabelSize, RAYWHITE);
 }
 
 bool Terrain::HitsBankStrip(const Rectangle& r, int index) const

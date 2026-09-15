@@ -62,12 +62,18 @@ Texture2D Sprites::GenRock()
 
 Texture2D Sprites::GenFuel()
 {
+    // A little petrol pump: red body, white display window, grey hose and nozzle.
     const int w = static_cast<int>(cfg::kObstacleW);
     const int h = static_cast<int>(cfg::kObstacleH);
-    Image img = GenImageColor(w, h, RED);
-    ImageDrawRectangle(&img, 3, 3, w - 6, h - 6, MAROON);
-    ImageDrawRectangle(&img, 6, h / 2 - 3, w - 12, 6, RAYWHITE);     // "F" stroke
-    ImageDrawRectangle(&img, 6, 6, 6, h - 12, RAYWHITE);
+    Image img = GenImageColor(w, h, BLANK);
+    ImageDrawRectangle(&img, 2,  h - 4, w - 8, 4,     DARKGRAY);        // base plinth
+    ImageDrawRectangle(&img, 4,  2,     w - 12, h - 4, RED);            // body
+    ImageDrawRectangle(&img, 4,  2,     w - 12, 3,     MAROON);         // top shadow
+    ImageDrawRectangle(&img, 7,  6,     w - 18, 8,     RAYWHITE);       // display window
+    ImageDrawRectangle(&img, 9,  9,     w - 22, 2,     DARKBLUE);       // digits
+    ImageDrawRectangle(&img, 8,  17,    w - 20, 6,     MAROON);         // nozzle holster
+    ImageDrawRectangle(&img, w - 7, 6,  2, 14,         DARKGRAY);       // hose
+    ImageDrawRectangle(&img, w - 9, 18, 6, 4,          BLACK);          // nozzle
     return Upload(img);
 }
 

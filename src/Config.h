@@ -29,6 +29,7 @@ constexpr int   kFuelChance       = 12;                              // percent 
 constexpr float kObstacleW        = 28.0f;
 constexpr float kObstacleH        = 28.0f;
 constexpr float kObstacleInset    = 8.0f;                            // keep this far from the banks
+constexpr int   kFuelLabelSize    = 12;                              // "FUEL" caption above each depot
 
 // Player craft.
 constexpr float kPlayerW      = 32.0f;
