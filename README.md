@@ -32,6 +32,7 @@ Notes:
 
 - Fuel burns steadily and the bar top-left goes red below a quarter. Fly over a red **FUEL** pump to refill; you keep refilling as long as you sit on it.
 - Score is distance plus 100 per kill. The river speeds up gently with distance, to at most double speed.
+- The river sometimes splits around an island; either channel works, but both banks of the island are as solid as the shore.
 - Boats cross the river back and forth; hitting one is as bad as hitting a rock.
 - Hitting a rock or boat rolls the plane into the water; hitting the bank or running dry spirals it in. Either way it costs one plane.
 - Top-ten scores with names are kept in `highscores.txt` next to the exe (delete it to start fresh). The name box remembers the last name typed, so a returning player just presses Enter. `BEST` at the top of the screen is the current record.
@@ -64,7 +65,7 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Config.h` | Every tunable: sizes, speeds, spawn chances, animation and sound parameters, version |
 | `src/Game.*` | State machine (Playing, Crashing, GameOver), collisions, fuel, score, HUD |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
-| `src/Terrain.*` | River strips that scroll down with random drift, banks interpolated between strips, sand shoreline, shallows, trees with reflections; pool of rocks, fuel pumps and crossing boats |
+| `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island (two channels) and rejoin; banks interpolated between strips, sand shoreline, shallows, trees with reflections; pool of rocks, fuel pumps and crossing boats |
 | `src/Bullets.*` | Fixed bullet pool |
 | `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash) and wake foam |
 | `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles; swap the `Gen*` bodies for `LoadTexture()` when real art exists |

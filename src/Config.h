@@ -8,8 +8,8 @@ namespace cfg {
 constexpr const char* kVersion = "0.3.0";
 constexpr const char* kTitle   = "River Flyer";
 
-constexpr int   kScreenW      = 640;
-constexpr int   kScreenH      = 800;
+constexpr int   kScreenW      = 960;
+constexpr int   kScreenH      = 1000;
 constexpr int   kTargetFps    = 60;
 
 // Rendering: sprites are generated at kSpriteScale x and filtered down;
@@ -26,11 +26,21 @@ constexpr float kTreeMaxR     = 12.0f;
 constexpr int   kStripH       = 32;                                  // px per strip
 constexpr int   kStripCount   = kScreenH / kStripH + 2;              // +2 so the top/bottom edges are always covered
 constexpr float kScrollSpeed  = 100.0f;                              // base px per second, downward
-constexpr float kRiverMinW    = 180.0f;
-constexpr float kRiverMaxW    = 420.0f;
-constexpr float kRiverDriftX  = 24.0f;                               // max centre change per strip
-constexpr float kRiverDriftW  = 20.0f;                               // max width change per strip
+constexpr float kRiverMinW    = 200.0f;
+constexpr float kRiverMaxW    = 640.0f;
+constexpr float kRiverDriftX  = 28.0f;                               // max centre change per strip
+constexpr float kRiverDriftW  = 24.0f;                               // max width change per strip
 constexpr float kBankMargin   = 40.0f;                               // keep the river this far from the window edge
+
+// Islands: the river splits into two channels around an island and rejoins.
+constexpr float kChannelMinW      = 130.0f;                          // each channel stays at least this wide
+constexpr float kIslandMinW       = 80.0f;
+constexpr float kIslandMaxW       = 180.0f;
+constexpr int   kIslandChance     = 8;                               // percent per strip, once the river is wide enough
+constexpr int   kSplitStrips      = 6;                               // strips over which the island widens / narrows
+constexpr int   kIslandMinStrips  = 8;                               // strips at full width
+constexpr int   kIslandMaxStrips  = 18;
+constexpr int   kIslandGapStrips  = 12;                              // single-channel strips between islands
 
 // Difficulty ramp: scroll speed multiplier grows linearly with distance.
 constexpr float kRampDistance = 8000.0f;                             // px of travel per +1.0 multiplier
@@ -55,7 +65,7 @@ constexpr float kPlayerW      = 32.0f;
 constexpr float kPlayerH      = 40.0f;
 constexpr float kPlayerSpeedX = 300.0f;                              // px per second
 constexpr float kPlayerSpeedY = 220.0f;
-constexpr float kPlayerStartY = kScreenH - 120.0f;
+constexpr float kPlayerStartY = kScreenH - 140.0f;
 constexpr float kPlayerBottomMargin = 40.0f;                         // room below the tail for the flame / chute
 
 // Bullets.
