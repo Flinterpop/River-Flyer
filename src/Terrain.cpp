@@ -55,11 +55,15 @@ void Terrain::Reset()
     phaseLeft_    = 0;
     islandGap_    = cfg::kStripCount;   // the first screen is always a single channel
     islandTarget_ = 0.0f;
+    gunSpacing_   = 0;
 
     for (Obstacle& o : obstacles_) {
         o.active = false;
         o.kind   = Kind::Rock;
         o.dir    = 1.0f;
+        o.timer  = 0.0f;
+        o.aim    = 0.0f;
+        o.flash  = 0.0f;
         o.rect   = Rectangle {0.0f, 0.0f, 0.0f, 0.0f};
     }
 
@@ -163,6 +167,63 @@ void Terrain::ShiftStripsDown()
     }
     strips_[0] = MakeNextStrip(strips_[1]);
     TrySpawnObstacle(strips_[0]);
+    TryPlaceGun(strips_[0]);
+}
+
+void Terrain::TryPlaceGun(const Strip& strip)
+{
+    // Guns live on islands only, once the island is wide enough to hold one,
+    // and never closer together than kGunSpacingStrips.
+    if (gunSpacing_ > 0) { --gunSpacing_; }
+    if (strip.islandWidth < cfg::kGunMinIsland || gunSpacing_ > 0) { return; }
+    if (GetRandomValue(1, 100) > cfg::kGunChance) { return; }
+    gunSpacing_ = cfg::kGunSpacingStrips;
+    const float reach = strip.islandWidth * 0.5f - cfg::kGunSize * 0.5f - 6.0f;
+    assert(reach >= 0.0f);
+    const float x = strip.islandCentre + RandomDrift(reach) - cfg::kGunSize * 0.5f;
+
+    for (Obstacle& o : obstacles_) {
+        if (o.active) { continue; }
+        o.rect   = Rectangle {x, -cfg::kGunSize, cfg::kGunSize, cfg::kGunSize};
+        o.kind   = Kind::Gun;
+        o.dir    = 1.0f;
+        o.timer  = cfg::kGunReload;   // a fresh gun waits a full reload before its first shot
+        o.aim    = 180.0f;            // barrel down-river until it acquires the plane
+        o.flash  = 0.0f;
+        o.active = true;
+        return;
+    }
+}
+
+int Terrain::UpdateGuns(float dt, Vector2 target, bool mayFire, Shells& shells)
+{
+    assert(dt >= 0.0f);
+    int fired = 0;
+    for (Obstacle& o : obstacles_) {
+        if (!o.active || o.kind != Kind::Gun) { continue; }
+        if (o.flash > 0.0f) { o.flash -= dt; }
+
+        const Vector2 c  {o.rect.x + o.rect.width * 0.5f, o.rect.y + o.rect.height * 0.5f};
+        const float   dx = target.x - c.x;
+        const float   dy = target.y - c.y;
+        const float   dist = std::sqrt(dx * dx + dy * dy);
+        const bool onScreen = c.y > 30.0f && c.y < static_cast<float>(cfg::kScreenH) - 40.0f;
+        if (!onScreen || dist > cfg::kGunRange || dist < 1.0f) { continue; }
+
+        // Track the plane; the sprite's barrel points up, so 0 deg = up, clockwise positive.
+        o.aim = std::atan2(dx, -dy) * 180.0f / 3.14159265f;
+        o.timer -= dt;
+        if (o.timer > 0.0f || !mayFire) { continue; }
+
+        const Vector2 vel {dx / dist * cfg::kShellSpeed, dy / dist * cfg::kShellSpeed};
+        const Vector2 muzzle {c.x + dx / dist * o.rect.width * 0.5f, c.y + dy / dist * o.rect.height * 0.5f};
+        shells.Fire(muzzle, vel);
+        o.timer = cfg::kGunReload;
+        o.flash = cfg::kGunFlashSeconds;
+        ++fired;
+    }
+    assert(fired >= 0 && fired <= cfg::kMaxObstacles);
+    return fired;
 }
 
 void Terrain::TrySpawnObstacle(const Strip& strip)
@@ -465,6 +526,14 @@ void Terrain::DrawObstacles(const Sprites& sprites) const
             DrawEllipse(static_cast<int>(cx) + 3, static_cast<int>(cy) + 5, o.rect.width * 0.5f, o.rect.height * 0.5f, Fade(BLACK, 0.3f));
             const Rectangle src {0.0f, 0.0f, static_cast<float>(sprites.Boat().width) * o.dir, static_cast<float>(sprites.Boat().height)};
             DrawTexturePro(sprites.Boat(), src, o.rect, Vector2 {0.0f, 0.0f}, 0.0f, WHITE);
+        } else if (o.kind == Kind::Gun) {
+            DrawEllipse(static_cast<int>(cx) + 3, static_cast<int>(cy) + 4, o.rect.width * 0.5f, o.rect.height * 0.4f, Fade(BLACK, 0.3f));
+            Sprites::DrawIntoRotated(sprites.Gun(), cx, cy, o.rect.width, o.rect.height, o.aim, WHITE);
+            if (o.flash > 0.0f) {
+                const float a  = o.aim * 3.14159265f / 180.0f;
+                const float r  = o.rect.width * 0.55f;
+                DrawCircleV(Vector2 {cx + std::sin(a) * r, cy - std::cos(a) * r}, 6.0f, Fade(YELLOW, 0.9f));
+            }
         } else {
             Sprites::DrawInto(sprites.Fuel(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
             DrawFuelLabel(o.rect);

@@ -118,8 +118,9 @@ Sprites::Sprites()
     grass_  = GenGrass();
     for (int v = 0; v < cfg::kTreeVariants; ++v) { trees_[static_cast<size_t>(v)] = GenTree(v); }
     boat_   = GenBoat();
+    gun_    = GenGun();
     assert(player_.id != 0 && rock_.id != 0 && fuel_.id != 0 && bullet_.id != 0);
-    assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0);
+    assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0 && gun_.id != 0);
 }
 
 const Texture2D& Sprites::Tree(int variant) const
@@ -130,6 +131,7 @@ const Texture2D& Sprites::Tree(int variant) const
 
 Sprites::~Sprites()
 {
+    UnloadTexture(gun_);
     UnloadTexture(boat_);
     for (Texture2D& t : trees_) { UnloadTexture(t); }
     UnloadTexture(grass_);
@@ -358,6 +360,29 @@ Texture2D Sprites::GenBoat()
     ImageDrawRectangle(&img, 52, 12, 4, h - 24, Color {120, 190, 250, 255});
     // Outboard motor at the stern.
     ImageDrawRectangle(&img, 0, static_cast<int>(cy) - 4, 8, 8, DARKGRAY);
+
+    return Upload(img);
+}
+
+// ---- gun --------------------------------------------------------------------
+
+// Turret seen from above with the barrel pointing up (rotated at draw time):
+// sandbag ring, steel base, domed turret and a twin barrel.
+Texture2D Sprites::GenGun()
+{
+    const int   n = static_cast<int>(cfg::kGunSize) * S;   // 52
+    const float c = static_cast<float>(n) * 0.5f;
+    Image img = GenImageColor(n, n, BLANK);
+
+    ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 1.0f), Color {150, 130, 90, 255});     // sandbags
+    ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 5.0f), Color {110, 95, 65, 255});
+    ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 8.0f), Color {70, 72, 70, 255});       // steel base
+    ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 13.0f), Color {95, 98, 95, 255});      // turret dome
+    ImageDrawCircleV(&img, Vector2 {c - 3.0f, c - 3.0f}, static_cast<int>(c - 19.0f), Color {130, 134, 130, 255});   // dome highlight
+    // Twin barrels up from the dome, with a darker muzzle band.
+    ImageDrawRectangle(&img, static_cast<int>(c) - 6, 0, 4, static_cast<int>(c), Color {40, 42, 40, 255});
+    ImageDrawRectangle(&img, static_cast<int>(c) + 2, 0, 4, static_cast<int>(c), Color {40, 42, 40, 255});
+    ImageDrawRectangle(&img, static_cast<int>(c) - 7, 0, 14, 4, Color {20, 20, 20, 255});
 
     return Upload(img);
 }

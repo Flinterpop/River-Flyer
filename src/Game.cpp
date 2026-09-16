@@ -27,9 +27,11 @@ void Game::Restart()
     bullets_.Reset();
     terrain_.Reset();
     effects_.Reset();
+    shells_.Reset();
     lives_        = cfg::kLives;
     kills_        = 0;
     boatKills_    = 0;
+    gunKills_     = 0;
     refuelPump_   = -1;
     fuel_         = cfg::kFuelMax;
     fireCooldown_ = 0.0f;
@@ -66,6 +68,8 @@ void Game::UpdatePlaying(float dt)
     effects_.Update(dt);
     UpdateWake(dt);
     UpdateFiring(dt);
+    shells_.Update(dt);
+    if (terrain_.UpdateGuns(dt, player_.Centre(), grace_ <= 0.0f, shells_) > 0) { audio_.Play(Audio::Sfx::Thud); }
     ResolveBulletHits();
 
     if (grace_ > 0.0f) {
@@ -88,6 +92,8 @@ void Game::UpdateCrashing(float dt)
     bullets_.Update(dt);
     effects_.Drift(terrain_.LastStep());
     effects_.Update(dt);
+    shells_.Update(dt);
+    (void)terrain_.UpdateGuns(dt, player_.Centre(), false, shells_);
     ResolveBulletHits();
     player_.UpdateCrash(dt);
 
@@ -230,7 +236,7 @@ void Game::ResolveBulletHits()
                                                                      : Effects::Style::Fuel;
         effects_.Spawn(RectCentre(o.rect), style);
         audio_.Play(Audio::Sfx::Pop);
-        if (o.kind == Terrain::Kind::Boat) { ++boatKills_; } else { ++kills_; }
+        if (o.kind == Terrain::Kind::Boat) { ++boatKills_; } else if (o.kind == Terrain::Kind::Gun) { ++gunKills_; } else { ++kills_; }
         terrain_.RemoveObstacle(hit);
         bullets_.Kill(b);
     }
@@ -242,8 +248,16 @@ void Game::CheckPlayerCrash()
     assert(grace_ <= 0.0f && state_ == State::Playing);
     const Rectangle box = player_.Bounds();
     const int       hit = terrain_.FindObstacle(box);
-    const bool rock = (hit >= 0) && (terrain_.ObstacleAt(hit).kind != Terrain::Kind::Fuel);   // rock or boat
+    const bool rock = (hit >= 0) && (terrain_.ObstacleAt(hit).kind != Terrain::Kind::Fuel);   // rock, boat or gun
 
+    const int shell = shells_.Find(box);
+    if (shell >= 0) {
+        shells_.Kill(shell);
+        effects_.Spawn(player_.Centre(), Effects::Style::Rock);
+        audio_.Play(Audio::Sfx::Crunch);
+        BeginCrash(Player::CrashStyle::Roll);
+        return;
+    }
     if (rock) {
         effects_.Spawn(RectCentre(terrain_.ObstacleAt(hit).rect), Effects::Style::Rock);
         terrain_.RemoveObstacle(hit);
@@ -290,7 +304,8 @@ bool Game::PlayerVisible() const
 
 int Game::Score() const
 {
-    const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill + boatKills_ * cfg::kPointsPerBoat;
+    const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill
+                    + boatKills_ * cfg::kPointsPerBoat + gunKills_ * cfg::kPointsPerGun;
     assert(score >= 0);
     return score;
 }
@@ -300,6 +315,7 @@ void Game::Draw() const
     terrain_.Draw(sprites_);
     effects_.DrawFoam();
     if (state_ == State::Playing && refuelPump_ >= 0) { DrawRefuelling(); }
+    shells_.Draw();
     bullets_.Draw(sprites_.Bullet());
     player_.Draw(sprites_.Player(), PlayerVisible());
     effects_.Draw();

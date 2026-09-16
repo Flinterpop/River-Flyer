@@ -42,6 +42,20 @@ constexpr int   kIslandMinStrips  = 8;                               // strips a
 constexpr int   kIslandMaxStrips  = 18;
 constexpr int   kIslandGapStrips  = 12;                              // single-channel strips between islands
 
+// Island guns: turrets that track the plane and lob slow shells.
+constexpr int   kGunChance        = 30;                              // percent per island strip wide enough
+constexpr int   kGunSpacingStrips = 4;                               // strips between guns on one island
+constexpr float kGunMinIsland     = 100.0f;                          // island width needed to hold a gun
+constexpr float kGunSize          = 26.0f;
+constexpr float kGunReload        = 2.8f;                            // seconds between shots
+constexpr float kGunRange         = 520.0f;                          // only fires when the plane is this close
+constexpr float kGunFlashSeconds  = 0.12f;
+constexpr int   kPointsPerGun     = 300;
+constexpr int   kMaxShells        = 16;
+constexpr float kShellSpeed       = 130.0f;                          // px per second, slow enough to dodge
+constexpr float kShellSeconds     = 5.0f;
+constexpr float kShellR           = 4.0f;
+
 // Difficulty ramp: scroll speed multiplier grows linearly with distance.
 constexpr float kRampDistance = 8000.0f;                             // px of travel per +1.0 multiplier
 constexpr float kRampMaxMult  = 2.0f;

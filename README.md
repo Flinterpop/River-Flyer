@@ -21,7 +21,7 @@ Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-late
 | Key | Action |
 |---|---|
 | W A S D / arrows | Fly. Up lights the afterburner, down pops a drag chute that slows the river |
-| Space | Shoot. Rocks and fuel pumps are 100 points, boats 200 |
+| Space | Shoot. Rocks and fuel pumps are 100 points, boats 200, island guns 300 |
 | Space / R / Enter | Fly again after losing the last plane |
 | Letters, Backspace, Enter | Type your name when you make the top ten |
 | Tab (hold) | Peek at the top-ten table mid-game |
@@ -34,6 +34,7 @@ Notes:
 - Score is distance plus 100 per kill. The river speeds up gently with distance, to at most double speed.
 - The river sometimes splits around an island; either channel works, but both banks of the island are as solid as the shore.
 - Boats cross the river back and forth; hitting one is as bad as hitting a rock.
+- Islands may carry gun emplacements that swivel to follow you and lob slow shells every few seconds; dodge them or shoot the gun. A shell hit rolls you in like a rock.
 - Hitting a rock or boat rolls the plane into the water; hitting the bank or running dry spirals it in. Either way it costs one plane.
 - Top-ten scores with names are kept in `highscores.txt` next to the exe (delete it to start fresh). The name box remembers the last name typed, so a returning player just presses Enter. `BEST` at the top of the screen is the current record.
 
@@ -68,8 +69,9 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island (two channels) and rejoin; banks interpolated between strips, sand shoreline, shallows, trees with reflections; pool of rocks, fuel pumps and crossing boats |
 | `src/Bullets.*` | Fixed bullet pool |
 | `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash) and wake foam |
+| `src/Shells.*` | Fixed pool of enemy shells fired by island guns |
 | `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
-| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare |
+| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud |
 | `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |
 
 Notes:

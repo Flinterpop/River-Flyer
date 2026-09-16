@@ -5,6 +5,7 @@
 #include "Effects.h"
 #include "HighScores.h"
 #include "Player.h"
+#include "Shells.h"
 #include "Sprites.h"
 #include "Terrain.h"
 
@@ -54,11 +55,13 @@ private:
     Bullets bullets_;
     Terrain terrain_;
     Effects    effects_;
+    Shells     shells_;
     HighScores scores_;
 
     int   lives_        {0};
     int   kills_        {0};
     int   boatKills_    {0};
+    int   gunKills_     {0};
     int   refuelPump_   {-1};     // obstacle index being drawn from, or -1
     float fuel_         {0.0f};
     float fireCooldown_ {0.0f};   // seconds until the next shot is allowed

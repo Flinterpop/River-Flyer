@@ -18,6 +18,7 @@ public:
         Splash,   // plane hits the water
         Brake,    // drag chute hiss
         Fanfare,  // new high score
+        Thud,     // island gun firing
         Count
     };
 
@@ -40,6 +41,7 @@ private:
     static Sound GenSplash();
     static Sound GenBrake();
     static Sound GenFanfare();
+    static Sound GenThud();
 
     bool                       ready_ {false};
     std::array<Sound, kCount>  bank_ {};

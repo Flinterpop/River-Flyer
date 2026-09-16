@@ -6,6 +6,7 @@
 #include "raylib.h"
 
 #include "Config.h"
+#include "Shells.h"
 #include "Sprites.h"
 
 // A river that flows down the screen. Stored as a fixed stack of horizontal
@@ -18,7 +19,7 @@
 // With an island the water is two channels (spans); without, one.
 class Terrain {
 public:
-    enum class Kind { Rock, Fuel, Boat };
+    enum class Kind { Rock, Fuel, Boat, Gun };
 
     struct Strip {
         float    centreX;        // river centre line at the top edge, screen space
@@ -37,12 +38,19 @@ public:
         Rectangle rect;
         Kind      kind;
         float     dir;      // boats: -1 or +1, the way it is crossing
+        float     timer;    // guns: seconds until the next shot
+        float     aim;      // guns: barrel angle, degrees clockwise from up
+        float     flash;    // guns: muzzle flash time left
         bool      active;
     };
 
     void Reset();
     void Update(float dt);
     void Draw(const Sprites& sprites) const;
+
+    // Guns track and fire at 'target' (screen space) when in range; returns
+    // how many shots were fired this frame so the caller can play a sound.
+    int UpdateGuns(float dt, Vector2 target, bool mayFire, Shells& shells);
 
     // True if 'r' touches a river bank (outer bank or island).
     bool HitsBank(const Rectangle& r) const;
@@ -71,6 +79,7 @@ private:
     void  ShiftStripsDown();
     void  TrySpawnObstacle(const Strip& strip);
     void  PlaceObstacle(const Strip& strip, Kind kind);
+    void  TryPlaceGun(const Strip& strip);
     void  MoveBoat(Obstacle& o, float dt);
 
     float StripTopY(int index) const;                              // screen y of a strip's top edge
@@ -97,4 +106,5 @@ private:
     int   phaseLeft_    {0};         // strips remaining in the current phase
     int   islandGap_    {0};         // single strips still required before the next island
     float islandTarget_ {0.0f};      // full width of the island being built
+    int   gunSpacing_   {0};         // strips to wait before another gun may be placed
 };
