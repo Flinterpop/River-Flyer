@@ -21,6 +21,7 @@ void Effects::Reset()
         f.active = false;
         f.age    = 0.0f;
         f.vx     = 0.0f;
+        f.smoke  = false;
         f.pos    = Vector2 {0.0f, 0.0f};
     }
 }
@@ -30,7 +31,16 @@ void Effects::SpawnFoam(Vector2 pos, float vx)
     assert(pos.y > -50.0f && pos.y < static_cast<float>(cfg::kScreenH) + 50.0f);
     for (Foam& f : foam_) {
         if (f.active) { continue; }
-        f.pos = pos; f.vx = vx; f.age = 0.0f; f.active = true;
+        f.pos = pos; f.vx = vx; f.age = 0.0f; f.smoke = false; f.active = true;
+        return;
+    }
+}
+
+void Effects::SpawnSmoke(Vector2 pos)
+{
+    for (Foam& f : foam_) {
+        if (f.active) { continue; }
+        f.pos = pos; f.vx = 0.0f; f.age = 0.0f; f.smoke = true; f.active = true;
         return;
     }
 }
@@ -49,7 +59,8 @@ void Effects::DrawFoam() const
         if (!f.active) { continue; }
         const float t = f.age / cfg::kFoamSeconds;
         assert(t >= 0.0f && t < 1.0f);
-        DrawCircleV(f.pos, cfg::kFoamR * (0.6f + 0.8f * t), Fade(RAYWHITE, 0.55f * (1.0f - t)));
+        if (f.smoke) { DrawCircleV(f.pos, 3.0f + 9.0f * t, Fade(GRAY, 0.5f * (1.0f - t))); }
+        else         { DrawCircleV(f.pos, cfg::kFoamR * (0.6f + 0.8f * t), Fade(RAYWHITE, 0.55f * (1.0f - t))); }
     }
 }
 
@@ -89,6 +100,7 @@ Color Effects::Tint(Style style)
         case Style::Fuel:  return ORANGE;
         case Style::Plane: return GOLD;
         case Style::Splash: return RAYWHITE;
+        case Style::Chaff:  return Color {230, 230, 255, 255};
     }
     assert(false && "unhandled Style");
     return WHITE;

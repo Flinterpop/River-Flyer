@@ -58,6 +58,25 @@ constexpr float kShellSpeed       = 130.0f;                          // px per s
 constexpr float kShellSeconds     = 5.0f;
 constexpr float kShellR           = 4.0f;
 
+// SAM sites: island launchers that fire homing missiles from long range.
+constexpr int   kSamChance        = 20;                              // percent per island strip wide enough
+constexpr float kSamMinIsland     = 120.0f;
+constexpr float kSamSize          = 34.0f;
+constexpr float kSamReload        = 6.0f;
+constexpr float kSamRange         = 800.0f;                          // longer reach than the guns
+constexpr int   kPointsPerSam     = 400;
+constexpr int   kPointsPerMissile = 100;
+constexpr int   kMaxMissiles      = 4;
+constexpr float kMissileSpeed     = 220.0f;                          // px per second
+constexpr float kMissileTurnDeg   = 140.0f;                          // degrees per second of steering
+constexpr float kMissileSeconds   = 6.0f;
+constexpr float kMissileSmokeGap  = 0.05f;
+constexpr int   kChaffPerPlane    = 3;
+constexpr float kChaffSeconds     = 2.0f;                            // how long the cloud sparkles
+constexpr float kJamFuelMult      = 3.0f;                            // fuel burn while jamming
+constexpr float kRwrFarGap        = 0.6f;                            // seconds between beeps at max range
+constexpr float kRwrNearGap       = 0.1f;
+
 // Difficulty ramp: scroll speed multiplier grows linearly with distance.
 constexpr float kRampDistance = 8000.0f;                             // px of travel per +1.0 multiplier
 constexpr float kRampMaxMult  = 2.0f;

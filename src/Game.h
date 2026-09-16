@@ -6,6 +6,7 @@
 #include "Bullets.h"
 #include "Effects.h"
 #include "HighScores.h"
+#include "Missiles.h"
 #include "Pilot.h"
 #include "Profiles.h"
 #include "Shells.h"
@@ -51,6 +52,9 @@ private:
     void Collect(Pilot& p, int obstacle);
     void UpdateCritters(float dt);
     void UpdateGuns(float dt);
+    void UpdateSams(float dt);
+    void UpdateMissiles(float dt);
+    void UpdateCountermeasures(Pilot& p, float dt);
     bool PilotVisible(const Pilot& p) const;
     int  Score() const;
     int  PilotCount() const { return twoPlayer_ ? 2 : 1; }
@@ -62,6 +66,7 @@ private:
     void DrawHud() const;
     static void DrawHudText(const char* text, int x, int y, int size);
     void DrawFuelBar(const Pilot& p, int x, int y) const;
+    void DrawWarnings(const Pilot& p, int x, int y, bool rightAlign) const;
     void DrawLives(const Pilot& p, int x, int y, bool rightToLeft) const;
     void DrawTitle() const;
     void DrawTitleRow(Row row, int y, const char* label, const char* value) const;
@@ -82,6 +87,7 @@ private:
     Terrain    terrain_;
     Effects    effects_;
     Shells     shells_;
+    Missiles   missiles_;
     HighScores scores_;
     Profiles   profiles_;
 
@@ -96,6 +102,8 @@ private:
     int   kills_      {0};
     int   boatKills_  {0};
     int   gunKills_   {0};
+    int   samKills_   {0};
+    int   missileKills_ {0};
     int   stars_      {0};
     int   bridges_    {0};
     int   otters_     {0};

@@ -22,6 +22,9 @@ struct Pilot {
     bool  out          {false};   // no planes left
     float shield       {0.0f};    // seconds of shield bubble left
     float spread       {0.0f};    // seconds of three-way fire left
+    int   chaff        {0};       // chaff bundles left
+    bool  jamming      {false};   // jam key held this frame
+    float rwrTimer     {0.0f};    // seconds until the next warning beep
 
     bool Active() const { return !out; }
     bool Flying() const { return !out && !plane.Crashing(); }

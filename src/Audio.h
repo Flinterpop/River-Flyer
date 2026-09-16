@@ -21,6 +21,9 @@ public:
         Thud,     // island gun firing
         Ding,     // pickup collected
         Music,    // background loop
+        Rwr,      // radar warning beep
+        Launch,   // missile launch warble
+        Chaff,    // chaff pop
         Count
     };
 
@@ -48,6 +51,9 @@ private:
     static Sound GenThud();
     static Sound GenDing();
     static Sound GenMusic();
+    static Sound GenRwr();
+    static Sound GenLaunch();
+    static Sound GenChaff();
 
     bool                       ready_ {false};
     bool                       musicOn_ {true};

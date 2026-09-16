@@ -40,12 +40,12 @@ namespace input {
 
 InputMap PilotOne(bool solo)
 {
-    return InputMap {KEY_W, KEY_S, KEY_A, KEY_D, KEY_SPACE, 0, solo};
+    return InputMap {KEY_W, KEY_S, KEY_A, KEY_D, KEY_SPACE, KEY_C, KEY_V, 0, solo};
 }
 
 InputMap PilotTwo()
 {
-    return InputMap {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_RIGHT_CONTROL, 1, false};
+    return InputMap {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_RIGHT_CONTROL, KEY_SLASH, KEY_PERIOD, 1, false};
 }
 
 Vector2 ReadMove(const InputMap& m)
@@ -79,6 +79,19 @@ bool FireHeld(const InputMap& m)
     if (IsKeyDown(m.fire)) { return true; }
     if (m.fire == KEY_RIGHT_CONTROL && IsKeyDown(KEY_RIGHT_SHIFT)) { return true; }   // either works for pilot 2
     return PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) || PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_TRIGGER_2);
+}
+
+bool ChaffPressed(const InputMap& m)
+{
+    if (IsKeyPressed(m.chaff)) { return true; }
+    if (m.pad < 0 || !IsGamepadAvailable(m.pad)) { return false; }
+    return IsGamepadButtonPressed(m.pad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT) || IsGamepadButtonPressed(m.pad, GAMEPAD_BUTTON_LEFT_TRIGGER_1);
+}
+
+bool JamHeld(const InputMap& m)
+{
+    if (IsKeyDown(m.jam)) { return true; }
+    return PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT) || PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
 }
 
 bool MenuUp()      { return IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W) || AnyPadPressed(GAMEPAD_BUTTON_LEFT_FACE_UP); }

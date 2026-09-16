@@ -10,11 +10,12 @@
 // central flash plus kBurstParticles debris dots flying outward and fading.
 class Effects {
 public:
-    enum class Style { Rock, Fuel, Plane, Splash };
+    enum class Style { Rock, Fuel, Plane, Splash, Chaff };
 
     void Reset();
     void Spawn(Vector2 centre, Style style);   // silently dropped if the pool is full
     void SpawnFoam(Vector2 pos, float vx);     // wake puff with sideways velocity
+    void SpawnSmoke(Vector2 pos);              // grey exhaust puff, no drift
     void Update(float dt);
     void Drift(float dy);                      // carry foam downstream with the river
     void Draw() const;                         // bursts (on top of everything)
@@ -32,6 +33,7 @@ private:
         Vector2 pos;
         float   vx;
         float   age;
+        bool    smoke;   // grey, larger, longer
         bool    active;
     };
 

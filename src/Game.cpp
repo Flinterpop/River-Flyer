@@ -51,8 +51,9 @@ void Game::StartGame()
     bullets_.Reset();
     effects_.Reset();
     shells_.Reset();
+    missiles_.Reset();
     terrain_.Reset(TuningFor(Diff()));
-    kills_ = 0; boatKills_ = 0; gunKills_ = 0; stars_ = 0; bridges_ = 0; otters_ = 0;
+    kills_ = 0; boatKills_ = 0; gunKills_ = 0; samKills_ = 0; missileKills_ = 0; stars_ = 0; bridges_ = 0; otters_ = 0;
     finalScore_ = 0; newRow_ = -1; shake_ = 0.0f;
 
     for (int i = 0; i < cfg::kMaxPilots; ++i) {
@@ -65,7 +66,7 @@ void Game::StartGame()
         p.lives = Diff().lives;
         p.fuel  = cfg::kFuelMax;
         p.grace = 0.0f; p.fireCooldown = 0.0f; p.foamTimer = 0.0f; p.refuelPump = -1;
-        p.shield = 0.0f; p.spread = 0.0f;
+        p.shield = 0.0f; p.spread = 0.0f; p.chaff = cfg::kChaffPerPlane; p.jamming = false; p.rwrTimer = 0.0f;
         assert(!terrain_.HitsBank(p.plane.Bounds()));   // must spawn in open water
     }
     state_ = State::Playing;
@@ -210,6 +211,8 @@ void Game::UpdatePlaying(float dt)
     effects_.Update(dt);
     shells_.Update(dt);
     UpdateGuns(dt);
+    UpdateSams(dt);
+    UpdateMissiles(dt);
     UpdateCritters(dt);
     ResolveBulletHits();
     for (Pilot& p : pilots_) { UpdatePilot(p, dt); }
@@ -232,6 +235,7 @@ void Game::UpdatePilot(Pilot& p, float dt)
     p.plane.Update(dt, p.map);
     if (p.shield > 0.0f) { p.shield -= dt; }
     if (p.spread > 0.0f) { p.spread -= dt; }
+    UpdateCountermeasures(p, dt);
     UpdateWake(p, dt);
     UpdateFiring(p, dt);
     if (p.grace > 0.0f) {
@@ -276,7 +280,7 @@ void Game::UpdateFiring(Pilot& p, float dt)
 bool Game::UpdateFuel(Pilot& p, float dt)
 {
     assert(dt >= 0.0f && p.Flying());
-    p.fuel -= Diff().fuelBurn * dt;
+    p.fuel -= Diff().fuelBurn * (p.jamming ? cfg::kJamFuelMult : 1.0f) * dt;
 
     // Flying over a depot refuels without destroying it.
     p.refuelPump = -1;
@@ -286,6 +290,7 @@ bool Game::UpdateFuel(Pilot& p, float dt)
             audio_.Sustain(Audio::Sfx::Slurp);
             p.refuelPump = hit;
         }
+        p.chaff = cfg::kChaffPerPlane;   // the pump restocks the chaff too
         p.fuel += cfg::kFuelRefillPerSec * dt;
     }
     if (p.fuel > cfg::kFuelMax) { p.fuel = cfg::kFuelMax; }
@@ -308,6 +313,62 @@ void Game::UpdateGuns(float dt)
     if (terrain_.UpdateGuns(dt, targets, n, mayFire, shells_) > 0) { audio_.Play(Audio::Sfx::Thud); }
 }
 
+void Game::UpdateSams(float dt)
+{
+    std::array<Vector2, cfg::kMaxPilots> targets {};
+    std::array<int, cfg::kMaxPilots>     who {};
+    int  n = 0;
+    bool mayFire = false;
+    for (int i = 0; i < cfg::kMaxPilots; ++i) {
+        const Pilot& p = pilots_[static_cast<size_t>(i)];
+        if (!p.Flying()) { continue; }
+        targets[static_cast<size_t>(n)] = p.plane.Centre();
+        who[static_cast<size_t>(n)]     = i;
+        ++n;
+        if (p.grace <= 0.0f) { mayFire = true; }
+    }
+    if (terrain_.UpdateSams(dt, targets, who, n, mayFire, missiles_) > 0) {
+        audio_.Play(Audio::Sfx::Launch);
+        shake_ = cfg::kShakeSeconds * 0.4f;
+    }
+}
+
+void Game::UpdateMissiles(float dt)
+{
+    std::array<Missiles::Target, cfg::kMaxPilots> t {};
+    for (int i = 0; i < cfg::kMaxPilots; ++i) {
+        const Pilot& p = pilots_[static_cast<size_t>(i)];
+        t[static_cast<size_t>(i)] = Missiles::Target {p.plane.Centre(), p.jamming, p.Flying()};
+    }
+    missiles_.Update(dt, t, terrain_.LastStep(), effects_);
+}
+
+void Game::UpdateCountermeasures(Pilot& p, float dt)
+{
+    assert(dt >= 0.0f && p.Flying());
+    const int idx = static_cast<int>(&p - pilots_.data());
+    p.jamming = input::JamHeld(p.map);
+
+    if (input::ChaffPressed(p.map) && p.chaff > 0) {
+        --p.chaff;
+        const Vector2 c = p.plane.Centre();
+        const Vector2 cloud {c.x, c.y + cfg::kPlayerH * 0.6f};
+        missiles_.Decoy(idx, cloud);
+        effects_.Spawn(cloud, Effects::Style::Chaff);
+        audio_.Play(Audio::Sfx::Chaff);
+    }
+
+    // RWR: beep faster as the nearest missile chasing this pilot closes in.
+    const float d = missiles_.NearestTo(idx, p.plane.Centre());
+    if (d < 0.0f) { p.rwrTimer = 0.0f; return; }
+    p.rwrTimer -= dt;
+    if (p.rwrTimer <= 0.0f) {
+        const float k = (d > cfg::kSamRange) ? 1.0f : d / cfg::kSamRange;
+        p.rwrTimer = cfg::kRwrNearGap + (cfg::kRwrFarGap - cfg::kRwrNearGap) * k;
+        audio_.Play(Audio::Sfx::Rwr);
+    }
+}
+
 void Game::UpdateCritters(float dt)
 {
     std::array<Vector2, cfg::kMaxPilots> planes {};
@@ -324,9 +385,18 @@ void Game::UpdateCritters(float dt)
 
 void Game::ResolveBulletHits()
 {
-    // Bounded: kMaxBullets x kMaxObstacles checks at most.
+    // Bounded: kMaxBullets x (kMaxObstacles + kMaxMissiles) checks at most.
     for (int b = 0; b < Bullets::Capacity(); ++b) {
         if (!bullets_.Active(b)) { continue; }
+        const int m = missiles_.Find(bullets_.Bounds(b));
+        if (m >= 0) {
+            effects_.Spawn(missiles_.Position(m), Effects::Style::Fuel);
+            audio_.Play(Audio::Sfx::Pop);
+            missiles_.Kill(m);
+            bullets_.Kill(b);
+            ++missileKills_;
+            continue;
+        }
         const int hit = terrain_.FindObstacle(bullets_.Bounds(b));
         if (hit < 0) { continue; }
         const Terrain::Obstacle& o = terrain_.ObstacleAt(hit);
@@ -347,6 +417,7 @@ void Game::ResolveBulletHits()
         audio_.Play(Audio::Sfx::Pop);
         if (kind == Terrain::Kind::Boat)        { ++boatKills_; }
         else if (kind == Terrain::Kind::Gun)    { ++gunKills_; }
+        else if (kind == Terrain::Kind::Sam)    { ++samKills_; }
         else if (kind == Terrain::Kind::Bridge) { ++bridges_; }
         else                                    { ++kills_; }
     }
@@ -376,6 +447,17 @@ void Game::CheckPilotCrash(Pilot& p)
     const Rectangle box = p.plane.Bounds();
     const bool shielded = p.shield > 0.0f;
 
+    const int missile = missiles_.Find(box);
+    if (missile >= 0) {
+        effects_.Spawn(missiles_.Position(missile), Effects::Style::Fuel);
+        missiles_.Kill(missile);
+        if (shielded) { audio_.Play(Audio::Sfx::Pop); }
+        else {
+            audio_.Play(Audio::Sfx::Crunch);
+            BeginCrash(p, Player::CrashStyle::Roll);
+            return;
+        }
+    }
     const int shell = shells_.Find(box);
     if (shell >= 0) {
         shells_.Kill(shell);
@@ -429,6 +511,7 @@ void Game::FinishCrash(Pilot& p)
     p.plane.Reset(twoPlayer_ ? ((idx == 0) ? -50.0f : 50.0f) : 0.0f);
     p.fuel  = cfg::kFuelMax;
     p.grace = cfg::kGraceSeconds;
+    p.chaff = cfg::kChaffPerPlane;
     assert(p.Flying());
 }
 
@@ -489,7 +572,8 @@ int Game::Score() const
 {
     const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill
                     + boatKills_ * cfg::kPointsPerBoat + gunKills_ * cfg::kPointsPerGun
-                    + stars_ * cfg::kPointsPerStar + bridges_ * cfg::kPointsPerBridge;
+                    + stars_ * cfg::kPointsPerStar + bridges_ * cfg::kPointsPerBridge
+                    + samKills_ * cfg::kPointsPerSam + missileKills_ * cfg::kPointsPerMissile;
     assert(score >= 0);
     return score;
 }
@@ -533,6 +617,7 @@ void Game::DrawWorld() const
         if (p.Flying() && p.refuelPump >= 0) { DrawRefuelling(p); }
     }
     shells_.Draw();
+    missiles_.Draw();
     bullets_.Draw(sprites_.Bullet());
     for (const Pilot& p : pilots_) { p.plane.Draw(sprites_.Player(), PilotVisible(p)); if (p.Flying()) { DrawPowerUps(p); } }
     effects_.Draw();
@@ -583,15 +668,31 @@ void Game::DrawHud() const
     const Pilot& p1 = pilots_[0];
     DrawHudText(p1.name.data(), 10, 8, 20);
     DrawFuelBar(p1, 10, 36);
+    DrawWarnings(p1, 10, 104, false);
     if (twoPlayer_) {
         const Pilot& p2 = pilots_[1];
         DrawLives(p1, 10, 60, false);
+        DrawWarnings(p2, cfg::kScreenW - 10, 104, true);
         const int nameW = MeasureText(p2.name.data(), 20);
         DrawHudText(p2.name.data(), cfg::kScreenW - 10 - nameW, 8, 20);
         DrawFuelBar(p2, cfg::kScreenW - 10 - 50 - cfg::kFuelBarW, 36);
         DrawLives(p2, cfg::kScreenW - 10, 60, true);
     } else {
         DrawLives(p1, cfg::kScreenW - 10, 8, true);
+    }
+}
+
+void Game::DrawWarnings(const Pilot& p, int x, int y, bool rightAlign) const
+{
+    const int idx = static_cast<int>(&p - pilots_.data());
+    const char* chaff = TextFormat("CHAFF x%d%s", p.chaff, p.jamming ? "  JAMMING" : "");
+    const int   cw    = MeasureText(chaff, 16);
+    DrawHudText(chaff, rightAlign ? x - cw : x, y, 16);
+    if (p.Flying() && missiles_.NearestTo(idx, p.plane.Centre()) >= 0.0f && std::fmod(GetTime(), 0.3) < 0.18) {
+        const char* warn = "MISSILE!  C: chaff  V: jam";
+        const int   ww   = MeasureText(warn, 20);
+        DrawText(warn, (rightAlign ? x - ww : x) + 2, y + 22, 20, Fade(BLACK, 0.6f));
+        DrawText(warn, rightAlign ? x - ww : x, y + 20, 20, RED);
     }
 }
 
@@ -688,7 +789,7 @@ void Game::DrawTitle() const
     DrawText(TextFormat("%s's best: %06d", profiles_.At(profileIdx_[0]), best1), px + 30, y, 18, LIGHTGRAY); y += 40;
 
     DrawText(TextFormat("SPACE / A: fly     Enter on a pilot: rename     Q: quit     M: music %s", audio_.MusicOn() ? "on" : "off"), px + 30, y, 16, LIGHTGRAY); y += 26;
-    DrawText("P1: WASD + Space    P2: arrows + Right Ctrl    Esc: pause", px + 30, y, 16, LIGHTGRAY); y += 26;
+    DrawText("P1: WASD + Space, C chaff, V jam    P2: arrows + RCtrl, / chaff, . jam", px + 30, y, 16, LIGHTGRAY); y += 26;
     int pads = 0;
     for (int i = 0; i < 2; ++i) { if (IsGamepadAvailable(i)) { ++pads; } }
     DrawText(TextFormat("Gamepads connected: %d", pads), px + 30, y, 16, pads > 0 ? LIME : GRAY);
@@ -766,7 +867,7 @@ void Game::DrawGameOver() const
     DrawRectangleLines(px, py, panelW, panelH, GOLD);
     DrawText(msg1, (cfg::kScreenW - MeasureText(msg1, 30)) / 2, py + 16, 30, GOLD);
     DrawText(TextFormat("Your score: %06d%s", finalScore_, (newRow_ >= 0) ? "  - new high score!" : ""), px + 30, py + 60, 18, RAYWHITE);
-    DrawText(TextFormat("Stars %d   Bridges %d   Otters spotted %d", stars_, bridges_, otters_), px + 30, py + 80, 16, LIGHTGRAY);
+    DrawText(TextFormat("Stars %d  Bridges %d  SAMs %d  Missiles %d  Otters %d", stars_, bridges_, samKills_, missileKills_, otters_), px + 30, py + 80, 16, LIGHTGRAY);
     DrawScoreTable(px + 30, py + 100);
     DrawText(msg2, (cfg::kScreenW - MeasureText(msg2, 22)) / 2, py + panelH - 40, 22, RAYWHITE);
 }

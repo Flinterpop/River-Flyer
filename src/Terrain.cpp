@@ -208,6 +208,7 @@ void Terrain::ShiftStripsDown()
     TrySpawnPickup(strips_[0]);
     TrySpawnBridge(strips_[0]);
     TryPlaceGun(strips_[0]);
+    TryPlaceSam(strips_[0]);
     TrySpawnCritter(strips_[0]);
 }
 
@@ -313,6 +314,63 @@ void Terrain::TryPlaceGun(const Strip& strip)
         o.active = true;
         return;
     }
+}
+
+void Terrain::TryPlaceSam(const Strip& strip)
+{
+    // Shares the island spacing with guns so a site is never on top of one.
+    if (!tuning_.guns || strip.islandWidth < cfg::kSamMinIsland || gunSpacing_ > 0) { return; }
+    if (!Roll(cfg::kSamChance)) { return; }
+    gunSpacing_ = cfg::kGunSpacingStrips;
+    const float reach = strip.islandWidth * 0.5f - cfg::kSamSize * 0.5f - 6.0f;
+    assert(reach >= 0.0f);
+    const float x = strip.islandCentre + RandomDrift(reach) - cfg::kSamSize * 0.5f;
+
+    for (Obstacle& o : obstacles_) {
+        if (o.active) { continue; }
+        o.rect   = Rectangle {x, -cfg::kSamSize, cfg::kSamSize, cfg::kSamSize};
+        o.kind   = Kind::Sam;
+        o.dir    = 1.0f;
+        o.timer  = cfg::kSamReload * 0.5f;   // half a reload before the first shot
+        o.aim    = 0.0f;
+        o.flash  = 0.0f;
+        o.hp     = 1;
+        o.active = true;
+        return;
+    }
+}
+
+int Terrain::UpdateSams(float dt, const std::array<Vector2, cfg::kMaxPilots>& targets, const std::array<int, cfg::kMaxPilots>& targetPilot,
+                        int targetCount, bool mayFire, Missiles& missiles)
+{
+    assert(dt >= 0.0f && targetCount >= 0 && targetCount <= cfg::kMaxPilots);
+    int launched = 0;
+    for (Obstacle& o : obstacles_) {
+        if (!o.active || o.kind != Kind::Sam) { continue; }
+        if (o.flash > 0.0f) { o.flash -= dt; }
+        o.aim += 180.0f * dt;                          // the dish just keeps spinning
+        if (o.aim >= 360.0f) { o.aim -= 360.0f; }
+        if (targetCount == 0 || o.rect.y < 20.0f) { continue; }
+
+        const Vector2 c {o.rect.x + o.rect.width * 0.5f, o.rect.y + o.rect.height * 0.5f};
+        int   best = -1;
+        float bestD = cfg::kSamRange;
+        for (int i = 0; i < targetCount; ++i) {
+            const float ex = targets[static_cast<size_t>(i)].x - c.x;
+            const float ey = targets[static_cast<size_t>(i)].y - c.y;
+            const float d  = std::sqrt(ex * ex + ey * ey);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best < 0) { continue; }
+        o.timer -= dt;
+        if (o.timer > 0.0f || !mayFire) { continue; }
+        missiles.Launch(Vector2 {c.x, o.rect.y}, targets[static_cast<size_t>(best)], targetPilot[static_cast<size_t>(best)]);
+        o.timer = cfg::kSamReload;
+        o.flash = 0.3f;
+        ++launched;
+    }
+    assert(launched >= 0 && launched <= cfg::kMaxObstacles);
+    return launched;
 }
 
 // ---- critters ---------------------------------------------------------------
@@ -824,6 +882,18 @@ void Terrain::DrawObstacles(const Sprites& sprites) const
                     const float r = o.rect.width * 0.55f;
                     DrawCircleV(Vector2 {cx + std::sin(a) * r, cy - std::cos(a) * r}, 6.0f, Fade(YELLOW, 0.9f));
                 }
+                break;
+            }
+            case Kind::Sam: {
+                DrawEllipse(static_cast<int>(cx) + 3, static_cast<int>(cy) + 5, o.rect.width * 0.55f, o.rect.height * 0.45f, Fade(BLACK, 0.3f));
+                Sprites::DrawInto(sprites.Sam(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
+                // Spinning radar dish on a mast at the corner of the pad.
+                const Vector2 mast {o.rect.x + 7.0f, o.rect.y + 9.0f};
+                const float   a = o.aim * kPi / 180.0f;
+                DrawCircleV(mast, 3.0f, DARKGRAY);
+                DrawLineEx(mast, Vector2 {mast.x + std::cos(a) * 9.0f, mast.y + std::sin(a) * 9.0f}, 3.0f, LIGHTGRAY);
+                DrawCircleV(Vector2 {mast.x + std::cos(a) * 9.0f, mast.y + std::sin(a) * 9.0f}, 2.5f, RAYWHITE);
+                if (o.flash > 0.0f) { DrawCircleV(Vector2 {cx, o.rect.y}, 10.0f * o.flash / 0.3f + 4.0f, Fade(ORANGE, 0.8f)); }
                 break;
             }
             case Kind::Bridge:

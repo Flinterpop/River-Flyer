@@ -119,6 +119,7 @@ Sprites::Sprites()
     for (int v = 0; v < cfg::kTreeVariants; ++v) { trees_[static_cast<size_t>(v)] = GenTree(v); }
     boat_   = GenBoat();
     gun_    = GenGun();
+    sam_    = GenSam();
     for (int i = 0; i < 4; ++i) { pickups_[static_cast<size_t>(i)] = GenPickup(i); }
     assert(player_.id != 0 && rock_.id != 0 && fuel_.id != 0 && bullet_.id != 0);
     assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0 && gun_.id != 0);
@@ -133,6 +134,7 @@ const Texture2D& Sprites::Tree(int variant) const
 Sprites::~Sprites()
 {
     for (Texture2D& t : pickups_) { UnloadTexture(t); }
+    UnloadTexture(sam_);
     UnloadTexture(gun_);
     UnloadTexture(boat_);
     for (Texture2D& t : trees_) { UnloadTexture(t); }
@@ -386,6 +388,27 @@ Texture2D Sprites::GenGun()
     ImageDrawRectangle(&img, static_cast<int>(c) + 2, 0, 4, static_cast<int>(c), Color {40, 42, 40, 255});
     ImageDrawRectangle(&img, static_cast<int>(c) - 7, 0, 14, 4, Color {20, 20, 20, 255});
 
+    return Upload(img);
+}
+
+// ---- SAM site ---------------------------------------------------------------
+
+// A cartoon launcher: red-and-white striped box on a concrete pad with a big
+// SAM label and a missile poking out of a tube. The radar dish is drawn live.
+Texture2D Sprites::GenSam()
+{
+    const int n = static_cast<int>(cfg::kSamSize) * S;   // 68
+    Image img = GenImageColor(n, n, BLANK);
+    ImageDrawRectangle(&img, 0, 0, n, n, Color {150, 150, 150, 255});                 // concrete pad
+    ImageDrawRectangleLines(&img, Rectangle {0.0f, 0.0f, static_cast<float>(n), static_cast<float>(n)}, 2, Color {100, 100, 100, 255});
+    for (int i = 0; i < 6; ++i) {                                                     // striped box
+        ImageDrawRectangle(&img, 6, 22 + i * 7, n - 12, 7, (i % 2 == 0) ? RED : RAYWHITE);
+    }
+    ImageDrawRectangle(&img, 6, 22, n - 12, 2, MAROON);
+    ImageDrawText(&img, "SAM", 14, 42, 20, BLACK);
+    ImageDrawRectangle(&img, n / 2 - 5, 4, 10, 22, DARKGRAY);                          // launch tube
+    ImageDrawRectangle(&img, n / 2 - 3, 2, 6, 10, LIGHTGRAY);                          // missile in the tube
+    ImageDrawTriangle(&img, Vector2 {static_cast<float>(n / 2 - 3), 2.0f}, Vector2 {static_cast<float>(n / 2), -4.0f}, Vector2 {static_cast<float>(n / 2 + 3), 2.0f}, RED);
     return Upload(img);
 }
 

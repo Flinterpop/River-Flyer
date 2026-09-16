@@ -81,6 +81,9 @@ Audio::Audio()
     bank_[static_cast<size_t>(Sfx::Thud)]    = GenThud();
     bank_[static_cast<size_t>(Sfx::Ding)]    = GenDing();
     bank_[static_cast<size_t>(Sfx::Music)]   = GenMusic();
+    bank_[static_cast<size_t>(Sfx::Rwr)]     = GenRwr();
+    bank_[static_cast<size_t>(Sfx::Launch)]  = GenLaunch();
+    bank_[static_cast<size_t>(Sfx::Chaff)]   = GenChaff();
     SetSoundVolume(bank_[static_cast<size_t>(Sfx::Music)], cfg::kMusicVolume);
     assert(bank_.front().frameCount > 0 && bank_.back().frameCount > 0);
 }
@@ -328,6 +331,52 @@ Sound Audio::GenMusic()
     UnloadWave(wave);
     assert(sound.frameCount > 0);
     return sound;
+}
+
+// RWR: a short, piercing two-tone beep.
+Sound Audio::GenRwr()
+{
+    const float dur    = 0.08f;
+    const int   frames = FramesFor(dur);
+    for (int i = 0; i < frames; ++i) {
+        const float t = TimeOf(i);
+        const float u = t / dur;
+        const float f = (u < 0.5f) ? 1500.0f : 1900.0f;
+        const float env = (u < 0.05f) ? u / 0.05f : ((u > 0.85f) ? (1.0f - u) / 0.15f : 1.0f);
+        g_scratch[static_cast<size_t>(i)] = std::sin(kTwoPi * f * t) * env * 0.3f;
+    }
+    return Commit(frames);
+}
+
+// Launch: a falling-then-rising warble that says "something just left the rail".
+Sound Audio::GenLaunch()
+{
+    const float dur    = 0.7f;
+    const int   frames = FramesFor(dur);
+    float phase = 0.0f;
+    for (int i = 0; i < frames; ++i) {
+        const float t = TimeOf(i);
+        const float u = t / dur;
+        const float f = 600.0f + 250.0f * std::sin(kTwoPi * 5.0f * t);
+        phase += kTwoPi * f / static_cast<float>(cfg::kAudioRate);
+        const float env = (u > 0.8f) ? (1.0f - u) / 0.2f : 1.0f;
+        const float s = std::sin(phase);
+        g_scratch[static_cast<size_t>(i)] = (0.6f * s + 0.4f * ((s >= 0.0f) ? 1.0f : -1.0f)) * env * 0.3f;
+    }
+    return Commit(frames);
+}
+
+// Chaff: a bright crackle - noise with a fast decay and a metallic ring.
+Sound Audio::GenChaff()
+{
+    const float dur    = 0.3f;
+    const int   frames = FramesFor(dur);
+    for (int i = 0; i < frames; ++i) {
+        const float t = TimeOf(i);
+        const float u = t / dur;
+        g_scratch[static_cast<size_t>(i)] = (Noise() * 0.6f + std::sin(kTwoPi * 2600.0f * t) * 0.4f) * std::exp(-9.0f * u) * 0.45f;
+    }
+    return Commit(frames);
 }
 
 // Brake: steady air-rush hiss, looped by Sustain() while the chute is out.

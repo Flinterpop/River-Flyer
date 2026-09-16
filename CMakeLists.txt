@@ -24,6 +24,7 @@ add_executable(scroller
     src/Shells.cpp
     src/Input.cpp
     src/Profiles.cpp
+    src/Missiles.cpp
 )
 target_include_directories(scroller PRIVATE src)
 target_link_libraries(scroller PRIVATE raylib glfw $<$<PLATFORM_ID:Windows>:winmm gdi32 opengl32 shell32>)

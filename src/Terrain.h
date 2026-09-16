@@ -6,6 +6,7 @@
 #include "raylib.h"
 
 #include "Config.h"
+#include "Missiles.h"
 #include "Shells.h"
 #include "Sprites.h"
 
@@ -20,9 +21,9 @@
 class Terrain {
 public:
     // Solid things, fuel, and pickups all live in one pool so collision is one query.
-    enum class Kind { Rock, Fuel, Boat, Gun, Bridge, Star, Shield, Spread, Life };
+    enum class Kind { Rock, Fuel, Boat, Gun, Sam, Bridge, Star, Shield, Spread, Life };
     static bool IsPickup(Kind k) { return k == Kind::Star || k == Kind::Shield || k == Kind::Spread || k == Kind::Life; }
-    static bool IsSolid(Kind k)  { return k == Kind::Rock || k == Kind::Boat || k == Kind::Gun || k == Kind::Bridge; }
+    static bool IsSolid(Kind k)  { return k == Kind::Rock || k == Kind::Boat || k == Kind::Gun || k == Kind::Sam || k == Kind::Bridge; }
 
     struct Strip {
         float    centreX;        // river centre line at the top edge, screen space
@@ -64,6 +65,11 @@ public:
     // Guns track and fire at the nearest of 'targets' when in range; returns
     // how many shots were fired this frame so the caller can play a sound.
     int UpdateGuns(float dt, const std::array<Vector2, cfg::kMaxPilots>& targets, int targetCount, bool mayFire, Shells& shells);
+
+    // SAM sites: launch at the nearest target in range; returns launches this frame.
+    // 'targetPilot' maps each target slot to a pilot index for the missile to chase.
+    int UpdateSams(float dt, const std::array<Vector2, cfg::kMaxPilots>& targets, const std::array<int, cfg::kMaxPilots>& targetPilot,
+                   int targetCount, bool mayFire, Missiles& missiles);
 
     // Critters: returns how many otters were spotted this frame (a plane came close).
     int UpdateCritters(float dt, const std::array<Vector2, cfg::kMaxPilots>& planes, int planeCount);
@@ -113,6 +119,7 @@ private:
     void  TrySpawnCritter(const Strip& strip);
     void  PlaceObstacle(const Strip& strip, Kind kind);
     void  TryPlaceGun(const Strip& strip);
+    void  TryPlaceSam(const Strip& strip);
     void  MoveBoat(Obstacle& o, float dt);
     void  SpawnCritter(Critter kind, Vector2 pos, float vx);
     void  TryFishJump();

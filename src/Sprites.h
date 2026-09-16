@@ -27,6 +27,7 @@ public:
     const Texture2D& Tree(int variant) const;
     const Texture2D& Boat()   const { return boat_; }
     const Texture2D& Gun()    const { return gun_; }
+    const Texture2D& Sam()    const { return sam_; }
     const Texture2D& Pickup(int which) const;   // 0 star, 1 shield, 2 spread, 3 life
 
     // Draws the whole texture scaled into the given on-screen box.
@@ -45,6 +46,7 @@ private:
     static Texture2D GenTree(int variant);
     static Texture2D GenBoat();
     static Texture2D GenGun();
+    static Texture2D GenSam();
     static Texture2D GenPickup(int which);
 
     Texture2D player_ {};
@@ -55,6 +57,7 @@ private:
     Texture2D grass_  {};
     Texture2D boat_   {};
     Texture2D gun_    {};
+    Texture2D sam_    {};
     std::array<Texture2D, 4> pickups_ {};
     std::array<Texture2D, cfg::kTreeVariants> trees_ {};
 };
