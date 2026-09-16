@@ -7,7 +7,7 @@
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 15 Sep 2026*
+*Last updated: 16 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
@@ -18,25 +18,34 @@ A vertical river scroller in C++20 and raylib, made for three players aged 7 to 
 
 Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-latest], unzip, run `scroller.exe`. It is a single static exe with no installer and nothing else to install.
 
+The title screen picks the game: **1 or 2 players**, a **pilot name** for each (Left/Right cycles the saved names, Enter renames), and **Easy / Normal / Hard**. Space, or A on a gamepad, starts. High scores are recorded under the pilot name automatically (both names joined for co-op).
+
 | Key | Action |
 |---|---|
-| W A S D / arrows | Fly. Up lights the afterburner, down pops a drag chute that slows the river |
-| Space | Shoot. Rocks and fuel pumps are 100 points, boats 200, island guns 300 |
-| Space / R / Enter | Fly again after losing the last plane |
-| Letters, Backspace, Enter | Type your name when you make the top ten |
+| Pilot 1: W A S D + Space | Fly and shoot. In a one-player game the arrow keys work too |
+| Pilot 2: arrows + Right Ctrl (or Right Shift) | Second pilot in a two-player game |
+| Gamepad | Left stick or d-pad flies, A or the right trigger shoots; pad 1 is pilot 1, pad 2 is pilot 2. Menus work from any pad |
+| Up | Afterburner |
+| Down | Drag chute: slows the river for everyone |
+| Esc / P / Start | Pause. From the pause panel Esc resumes, Q returns to the title |
 | Tab (hold) | Peek at the top-ten table mid-game |
+| M | Music on / off |
 | F12 | Save `screenshotNNN.png` next to the exe |
-| Esc | Quit |
+| Q (title screen) | Quit |
+
+Scoring: distance plus 100 per rock or fuel pump shot, 200 per boat, 300 per island gun, 500 per bridge, 50 per star.
 
 Notes:
 
-- Fuel burns steadily and the bar top-left goes red below a quarter. Fly over a red **FUEL** pump to refill; you keep refilling as long as you sit on it.
-- Score is distance plus 100 per kill. The river speeds up gently with distance, to at most double speed.
-- The river sometimes splits around an island; either channel works, but both banks of the island are as solid as the shore.
-- Boats cross the river back and forth; hitting one is as bad as hitting a rock.
-- Islands may carry gun emplacements that swivel to follow you and lob slow shells every few seconds; dodge them or shoot the gun. A shell hit rolls you in like a rock.
-- Hitting a rock or boat rolls the plane into the water; hitting the bank or running dry spirals it in. Either way it costs one plane.
-- Top-ten scores with names are kept in `highscores.txt` next to the exe (delete it to start fresh). The name box remembers the last name typed, so a returning player just presses Enter. `BEST` at the top of the screen is the current record.
+- Fuel burns steadily and the bar goes red below a quarter. Fly over a red **FUEL** pump to refill; a hose runs from the pump while you are taking fuel on.
+- Difficulty sets planes (5 on Easy, 3 otherwise), how many rocks and boats spawn, whether islands have guns, shell speed, fuel burn and how fast the river ramps up.
+- The scenery changes every 6000 px: forest, farmland, canyon, snow. Night falls and lifts once every 14000 px.
+- The river sometimes splits around an island; either channel works, but both banks of the island are as solid as the shore. Islands may carry gun emplacements that swivel to follow you and lob slow shells; dodge them or shoot the gun.
+- Boats cross the river back and forth; bridges block the whole channel and take three hits to open. Hitting a rock, boat, gun, bridge or shell rolls the plane into the water; hitting a bank or running dry spirals it in. Either way it costs one plane.
+- Pickups float on the water: a **star** for points, a **shield** bubble that pops anything solid it touches for 7 s (banks still count), a **spread** that fires three-way for 10 s, and an **extra plane**.
+- Wildlife is harmless: ducks, jumping fish, deer on the banks and the occasional otter. Fly close to an otter to spot it; the game-over panel keeps count.
+- In a two-player game the score is shared, each pilot has their own planes and fuel, guns aim at whoever is nearer, and the game ends when both are out.
+- Top-ten scores are kept in `highscores.txt`, pilot names in `profiles.txt`, both next to the exe (delete either to start fresh). `BEST` at the top of the screen is the current record.
 
 ## Build
 
@@ -63,16 +72,19 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 
 | File | Holds |
 |---|---|
-| `src/Config.h` | Every tunable: sizes, speeds, spawn chances, animation and sound parameters, version |
-| `src/Game.*` | State machine (Playing, Crashing, GameOver), collisions, fuel, score, HUD |
+| `src/Config.h` | Every tunable: sizes, speeds, spawn chances, difficulty presets, stage palettes, animation and sound parameters, version |
+| `src/Game.*` | State machine (Title, EnterName, Playing, Paused, GameOver), per-pilot play, collisions, pickups, scoring, HUD and panels |
+| `src/Pilot.h` | One player: plane, controls, planes left, fuel, timers, power-ups |
+| `src/Input.*` | Keyboard and gamepad bindings per pilot; menu navigation |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
-| `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island (two channels) and rejoin; banks interpolated between strips, sand shoreline, shallows, trees with reflections; pool of rocks, fuel pumps and crossing boats |
-| `src/Bullets.*` | Fixed bullet pool |
-| `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash) and wake foam |
+| `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island; banks interpolated between strips, sand shoreline, shallows, trees with reflections; stage palettes; pools of rocks, fuel pumps, boats, guns, bridges, pickups and critters |
+| `src/Bullets.*` | Fixed bullet pool (with sideways velocity for the spread shot) |
 | `src/Shells.*` | Fixed pool of enemy shells fired by island guns |
-| `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
-| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud |
+| `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash) and wake foam |
+| `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles, trees, boat, gun, pickups; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
+| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud, ding, and the music loop |
 | `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |
+| `src/Profiles.*` | Pilot names for the title screen, saved as `profiles.txt` beside the exe |
 
 Notes:
 

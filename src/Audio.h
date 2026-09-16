@@ -20,6 +20,7 @@ public:
         Fanfare,  // new high score
         Thud,     // island gun firing
         Ding,     // pickup collected
+        Music,    // background loop
         Count
     };
 
@@ -30,6 +31,8 @@ public:
 
     void Play(Sfx sfx);       // restart the effect from the beginning
     void Sustain(Sfx sfx);    // keep it going: retrigger only once it has finished
+    void ToggleMusic();       // mute / unmute the loop
+    bool MusicOn() const { return musicOn_; }
 
 private:
     static constexpr int kCount = static_cast<int>(Sfx::Count);
@@ -44,7 +47,9 @@ private:
     static Sound GenFanfare();
     static Sound GenThud();
     static Sound GenDing();
+    static Sound GenMusic();
 
     bool                       ready_ {false};
+    bool                       musicOn_ {true};
     std::array<Sound, kCount>  bank_ {};
 };

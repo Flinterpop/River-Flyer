@@ -259,6 +259,11 @@ constexpr float kBridgeH        = 22.0f;
 constexpr int   kBridgeHp       = 3;
 constexpr int   kPointsPerBridge = 500;
 
+// Music: an 8-bar chiptune loop synthesised at start-up.
+constexpr float kMusicBpm     = 140.0f;
+constexpr int   kMusicEighths = 64;                                  // 8 bars of 8
+constexpr float kMusicVolume  = 0.35f;
+
 // HUD.
 constexpr int   kFuelBarW     = 200;
 constexpr int   kFuelBarH     = 14;

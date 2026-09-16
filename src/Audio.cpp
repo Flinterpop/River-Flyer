@@ -80,6 +80,8 @@ Audio::Audio()
     bank_[static_cast<size_t>(Sfx::Fanfare)] = GenFanfare();
     bank_[static_cast<size_t>(Sfx::Thud)]    = GenThud();
     bank_[static_cast<size_t>(Sfx::Ding)]    = GenDing();
+    bank_[static_cast<size_t>(Sfx::Music)]   = GenMusic();
+    SetSoundVolume(bank_[static_cast<size_t>(Sfx::Music)], cfg::kMusicVolume);
     assert(bank_.front().frameCount > 0 && bank_.back().frameCount > 0);
 }
 
@@ -101,8 +103,15 @@ void Audio::Sustain(Sfx sfx)
 {
     assert(sfx != Sfx::Count);
     if (!ready_) { return; }
+    if (sfx == Sfx::Music && !musicOn_) { return; }
     const Sound& s = bank_[static_cast<size_t>(sfx)];
     if (!IsSoundPlaying(s)) { PlaySound(s); }
+}
+
+void Audio::ToggleMusic()
+{
+    musicOn_ = !musicOn_;
+    if (ready_ && !musicOn_) { StopSound(bank_[static_cast<size_t>(Sfx::Music)]); }
 }
 
 // ---- generators -----------------------------------------------------------
@@ -251,6 +260,74 @@ Sound Audio::GenDing()
         g_scratch[static_cast<size_t>(i)] = s * env * 0.35f;
     }
     return Commit(frames);
+}
+
+// Music: square lead over a pentatonic tune, triangle bass on the chord
+// roots, a kick on beats 1 and 3 and a hat on the off-beats. The buffer is
+// longer than the scratch space, so it is built in its own allocation.
+Sound Audio::GenMusic()
+{
+    // Melody in semitones from C5; -99 is a rest. Eight bars of eight eighths.
+    const int melody[cfg::kMusicEighths] = {
+        0, 2, 4, 7, 4, 2, 0, -3,      0, 4, 7, 12, 9, 7, 4, 2,
+        5, 5, 9, 12, 9, 5, 4, 2,      7, 9, 7, 4, 2, 0, -5, -3,
+        0, 0, 4, 4, 7, 7, 12, -99,    9, 7, 4, 2, 4, 7, 9, 12,
+        5, 9, 12, 14, 12, 9, 5, -99,  7, 4, 2, 0, -3, -5, 0, -99 };
+    const int roots[8] = { 0, 0, 5, 7, 0, 0, 5, 7 };   // chord root per bar, semitones from C3
+
+    const float eighth = 60.0f / cfg::kMusicBpm / 2.0f;
+    const float dur    = eighth * static_cast<float>(cfg::kMusicEighths);
+    const int   frames = static_cast<int>(dur * static_cast<float>(cfg::kAudioRate));
+    assert(frames > 0 && frames < cfg::kAudioRate * 20);
+
+    float* buf = static_cast<float*>(MemAlloc(static_cast<unsigned int>(frames) * sizeof(float)));
+    assert(buf != nullptr);
+    float leadPhase = 0.0f, bassPhase = 0.0f;
+    for (int i = 0; i < frames; ++i) {
+        const float t    = TimeOf(i);
+        const int   step = static_cast<int>(t / eighth) % cfg::kMusicEighths;
+        const float in   = (t - static_cast<float>(step) * eighth) / eighth;   // 0..1 through the eighth
+        const int   bar  = step / 8;
+
+        // Lead: square-ish with a short attack, a hold, and a release.
+        float lead = 0.0f;
+        if (melody[step] != -99) {
+            const float f = 523.25f * std::pow(2.0f, static_cast<float>(melody[step]) / 12.0f);
+            leadPhase += kTwoPi * f / static_cast<float>(cfg::kAudioRate);
+            const float s   = std::sin(leadPhase);
+            const float env = (in < 0.05f) ? in / 0.05f : ((in > 0.8f) ? (1.0f - in) / 0.2f : 1.0f);
+            lead = (0.5f * s + 0.5f * ((s >= 0.0f) ? 1.0f : -1.0f)) * env;
+        }
+        // Bass: triangle on the root, one note per beat (two eighths), decaying.
+        const float fb = 130.81f * std::pow(2.0f, static_cast<float>(roots[bar]) / 12.0f);
+        bassPhase += fb / static_cast<float>(cfg::kAudioRate);
+        const float tri  = 4.0f * std::fabs(bassPhase - std::floor(bassPhase + 0.5f)) - 1.0f;
+        const float beat = std::fmod(t, eighth * 2.0f) / (eighth * 2.0f);
+        const float bass = tri * std::exp(-2.5f * beat);
+        // Drums: kick on beats 1 and 3 of the bar, hat on every off-beat eighth.
+        const int   inBar = step % 8;
+        const float kick  = ((inBar == 0 || inBar == 4) && in < 0.5f) ? std::sin(kTwoPi * 60.0f * in * eighth) * std::exp(-12.0f * in) : 0.0f;
+        const float hat   = (inBar % 2 == 1 && in < 0.15f) ? Noise() * std::exp(-30.0f * in) : 0.0f;
+
+        float s = 0.28f * lead + 0.22f * bass + 0.4f * kick + 0.12f * hat;
+        if (s > 1.0f) { s = 1.0f; } if (s < -1.0f) { s = -1.0f; }
+        buf[i] = s;
+    }
+
+    Wave wave {};
+    wave.frameCount = static_cast<unsigned int>(frames);
+    wave.sampleRate = static_cast<unsigned int>(cfg::kAudioRate);
+    wave.sampleSize = 16;
+    wave.channels   = 1;
+    wave.data       = MemAlloc(static_cast<unsigned int>(frames) * sizeof(int16_t));
+    assert(wave.data != nullptr);
+    int16_t* out = static_cast<int16_t*>(wave.data);
+    for (int i = 0; i < frames; ++i) { out[i] = static_cast<int16_t>(buf[i] * 32767.0f); }
+    MemFree(buf);
+    const Sound sound = LoadSoundFromWave(wave);
+    UnloadWave(wave);
+    assert(sound.frameCount > 0);
+    return sound;
 }
 
 // Brake: steady air-rush hiss, looped by Sustain() while the chute is out.

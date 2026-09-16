@@ -74,6 +74,8 @@ void Game::StartGame()
 void Game::Update(float dt)
 {
     assert(dt >= 0.0f);
+    if (IsKeyPressed(KEY_M)) { audio_.ToggleMusic(); }
+    audio_.Sustain(Audio::Sfx::Music);
     switch (state_) {
         case State::Title:     UpdateTitle(dt);     break;
         case State::EnterName: UpdateEnterName(dt); break;
@@ -685,7 +687,7 @@ void Game::DrawTitle() const
     const int best1 = scores_.BestFor(profiles_.At(profileIdx_[0]));
     DrawText(TextFormat("%s's best: %06d", profiles_.At(profileIdx_[0]), best1), px + 30, y, 18, LIGHTGRAY); y += 40;
 
-    DrawText("SPACE / A: fly     Enter on a pilot: rename     Q: quit", px + 30, y, 16, LIGHTGRAY); y += 26;
+    DrawText(TextFormat("SPACE / A: fly     Enter on a pilot: rename     Q: quit     M: music %s", audio_.MusicOn() ? "on" : "off"), px + 30, y, 16, LIGHTGRAY); y += 26;
     DrawText("P1: WASD + Space    P2: arrows + Right Ctrl    Esc: pause", px + 30, y, 16, LIGHTGRAY); y += 26;
     int pads = 0;
     for (int i = 0; i < 2; ++i) { if (IsGamepadAvailable(i)) { ++pads; } }
