@@ -27,13 +27,15 @@ The title screen picks the game: **1 or 2 players**, a **pilot name** for each (
 | Gamepad | Left stick or d-pad flies, A or the right trigger shoots; pad 1 is pilot 1, pad 2 is pilot 2. Menus work from any pad |
 | Up | Afterburner |
 | Down | Drag chute: slows the river for everyone |
+| C (pilot 2: /) | Drop chaff: every missile chasing you turns to chase the cloud instead. Three per plane. On a pad, B or the left bumper |
+| V hold (pilot 2: .) | Jam: missiles lose lock and fly straight while held, but fuel burns three times as fast. On a pad, X or the right bumper |
 | Esc / P / Start | Pause. From the pause panel Esc resumes, Q returns to the title |
 | Tab (hold) | Peek at the top-ten table mid-game |
 | M | Music on / off |
 | F12 | Save `screenshotNNN.png` next to the exe |
 | Q (title screen) | Quit |
 
-Scoring: distance plus 100 per rock or fuel pump shot, 200 per boat, 300 per island gun, 500 per bridge, 50 per star.
+Scoring: distance plus 100 per rock or fuel pump shot, 200 per boat, 300 per island gun, 400 per missile site, 100 per missile shot down, 500 per bridge, 50 per star.
 
 Notes:
 
@@ -41,7 +43,8 @@ Notes:
 - Difficulty sets planes (5 on Easy, 3 otherwise), how many rocks and boats spawn, whether islands have guns, shell speed, fuel burn and how fast the river ramps up.
 - The scenery changes every 6000 px: forest, farmland, canyon, snow. Night falls and lifts once every 14000 px.
 - The river sometimes splits around an island; either channel works, but both banks of the island are as solid as the shore. Islands may carry gun emplacements that swivel to follow you and lob slow shells; dodge them or shoot the gun.
-- Boats cross the river back and forth; bridges block the whole channel and take three hits to open. Hitting a rock, boat, gun, bridge or shell rolls the plane into the water; hitting a bank or running dry spirals it in. Either way it costs one plane.
+- Wider islands on Normal and Hard may also carry a **missile site**. It fires from much further away than a gun, and its missile chases you, trailing smoke, for up to six seconds. A radar-warning beep gets faster as it closes and the HUD flashes **MISSILE!** with a reminder of the keys. Missiles turn slowly, so a hard sidestep at close range makes one overshoot; you can also shoot it, drop chaff, or hold jam. The shield pops a missile harmlessly. Fuel pumps restock chaff.
+- Boats cross the river back and forth; bridges block the whole channel and take three hits to open. Hitting a rock, boat, gun, bridge, shell or missile rolls the plane into the water; hitting a bank or running dry spirals it in. Either way it costs one plane.
 - Pickups float on the water: a **star** for points, a **shield** bubble that pops anything solid it touches for 7 s (banks still count), a **spread** that fires three-way for 10 s, and an **extra plane**.
 - Wildlife is harmless: ducks, jumping fish, deer on the banks and the occasional otter. Fly close to an otter to spot it; the game-over panel keeps count.
 - In a two-player game the score is shared, each pilot has their own planes and fuel, guns aim at whoever is nearer, and the game ends when both are out.
@@ -77,12 +80,13 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Pilot.h` | One player: plane, controls, planes left, fuel, timers, power-ups |
 | `src/Input.*` | Keyboard and gamepad bindings per pilot; menu navigation |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
-| `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island; banks interpolated between strips, sand shoreline, shallows, trees with reflections; stage palettes; pools of rocks, fuel pumps, boats, guns, bridges, pickups and critters |
+| `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island; banks interpolated between strips, sand shoreline, shallows, trees with reflections; stage palettes; pools of rocks, fuel pumps, boats, guns, missile sites, bridges, pickups and critters |
 | `src/Bullets.*` | Fixed bullet pool (with sideways velocity for the spread shot) |
 | `src/Shells.*` | Fixed pool of enemy shells fired by island guns |
-| `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash) and wake foam |
-| `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles, trees, boat, gun, pickups; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
-| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud, ding, and the music loop |
+| `src/Missiles.*` | Fixed pool of homing missiles from the island sites: limited turn rate, chaff decoy, straight flight while jammed |
+| `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash, chaff), missile smoke and wake foam |
+| `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles, trees, boat, gun, missile site, pickups; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
+| `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud, ding, launch, chaff, radar warning, and the music loop |
 | `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |
 | `src/Profiles.*` | Pilot names for the title screen, saved as `profiles.txt` beside the exe |
 
