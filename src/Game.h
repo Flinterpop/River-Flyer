@@ -48,6 +48,8 @@ private:
     void BeginCrash(Pilot& p, Player::CrashStyle style);
     void FinishCrash(Pilot& p);
     void ResolveBulletHits();
+    void Collect(Pilot& p, int obstacle);
+    void UpdateCritters(float dt);
     void UpdateGuns(float dt);
     bool PilotVisible(const Pilot& p) const;
     int  Score() const;
@@ -68,6 +70,8 @@ private:
     void DrawEnterName() const;
     void DrawScoreTable(int x, int y) const;
     void DrawRefuelling(const Pilot& p) const;
+    void DrawStageBanner() const;
+    void DrawPowerUps(const Pilot& p) const;
     void DrawPeekTable() const;
     Vector2 ShakeOffset() const;
 
@@ -92,6 +96,9 @@ private:
     int   kills_      {0};
     int   boatKills_  {0};
     int   gunKills_   {0};
+    int   stars_      {0};
+    int   bridges_    {0};
+    int   otters_     {0};
     int   finalScore_ {0};         // frozen when the last plane is lost
     int   newRow_     {-1};        // row of the entry just added, or -1
     float shake_      {0.0f};      // seconds of screen shake left

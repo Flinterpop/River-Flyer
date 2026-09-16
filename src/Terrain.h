@@ -10,8 +10,8 @@
 #include "Sprites.h"
 
 // A river that flows down the screen. Stored as a fixed stack of horizontal
-// strips (index 0 = top of screen) plus a fixed pool of obstacles. Nothing is
-// allocated after construction.
+// strips (index 0 = top of screen) plus fixed pools of obstacles (including
+// pickups) and critters. Nothing is allocated after construction.
 //
 // Each strip holds the river's outer banks (centre and width) and an optional
 // island (centre and width, 0 = none) at its TOP edge; between strips both are
@@ -19,7 +19,10 @@
 // With an island the water is two channels (spans); without, one.
 class Terrain {
 public:
-    enum class Kind { Rock, Fuel, Boat, Gun };
+    // Solid things, fuel, and pickups all live in one pool so collision is one query.
+    enum class Kind { Rock, Fuel, Boat, Gun, Bridge, Star, Shield, Spread, Life };
+    static bool IsPickup(Kind k) { return k == Kind::Star || k == Kind::Shield || k == Kind::Spread || k == Kind::Life; }
+    static bool IsSolid(Kind k)  { return k == Kind::Rock || k == Kind::Boat || k == Kind::Gun || k == Kind::Bridge; }
 
     struct Strip {
         float    centreX;        // river centre line at the top edge, screen space
@@ -41,6 +44,7 @@ public:
         float     timer;    // guns: seconds until the next shot
         float     aim;      // guns: barrel angle, degrees clockwise from up
         float     flash;    // guns: muzzle flash time left
+        int       hp;       // bridges: hits left
         bool      active;
     };
 
@@ -61,6 +65,9 @@ public:
     // how many shots were fired this frame so the caller can play a sound.
     int UpdateGuns(float dt, const std::array<Vector2, cfg::kMaxPilots>& targets, int targetCount, bool mayFire, Shells& shells);
 
+    // Critters: returns how many otters were spotted this frame (a plane came close).
+    int UpdateCritters(float dt, const std::array<Vector2, cfg::kMaxPilots>& planes, int planeCount);
+
     // True if 'r' touches a river bank (outer bank or island).
     bool HitsBank(const Rectangle& r) const;
 
@@ -70,6 +77,7 @@ public:
     static constexpr int ObstacleCapacity() { return cfg::kMaxObstacles; }
     const Obstacle& ObstacleAt(int i) const;
     void            RemoveObstacle(int i);
+    bool            DamageObstacle(int i);   // one hit; true when it is destroyed
 
     // Pixels scrolled by the most recent Update().
     float LastStep() const { return lastStep_; }
@@ -80,35 +88,62 @@ public:
     // Current scroll speed after the difficulty ramp, px per second.
     float ScrollSpeed() const;
 
+    // Scenery stage: index, and px travelled into it.
+    int   StageIndex() const;
+    float StageProgress() const;
+
 private:
     enum class Phase { Single, Splitting, Island, Merging };
+
+    enum class Critter { Duck, Fish, Deer, Otter };
+    struct Beast {
+        Vector2 pos;
+        float   vx;
+        float   age;
+        Critter kind;
+        bool    active;
+    };
 
     Strip MakeNextStrip(const Strip& above);          // advances the island phase machine
     void  AdvancePhase(Strip& next);
     void  ShiftStripsDown();
     void  TrySpawnObstacle(const Strip& strip);
+    void  TrySpawnPickup(const Strip& strip);
+    void  TrySpawnBridge(const Strip& strip);
+    void  TrySpawnCritter(const Strip& strip);
     void  PlaceObstacle(const Strip& strip, Kind kind);
     void  TryPlaceGun(const Strip& strip);
     void  MoveBoat(Obstacle& o, float dt);
+    void  SpawnCritter(Critter kind, Vector2 pos, float vx);
+    void  TryFishJump();
 
     float StripTopY(int index) const;                              // screen y of a strip's top edge
     int   SpansAt(float y, std::array<Span, 2>& out) const;         // water spans at screen y: 1 or 2
     static int SpansOf(float centre, float width, float islandCentre, float islandWidth, std::array<Span, 2>& out);
 
+    // Stage palette, blended across the boundary.
+    float StageBlend() const;                                       // 0 = previous stage .. 1 = current
+    Color StageColor(Color cfg::Stage::* member) const;
+    float StageValue(float cfg::Stage::* member) const;
+
     void DrawWater(const Sprites& sprites) const;
     void DrawShallows() const;
     void DrawShore() const;
-    static void DrawShoreSegment(Vector2 a, Vector2 b, float landSide);
+    void DrawShoreSegment(Vector2 a, Vector2 b, float landSide, Color sand) const;
     void DrawTrees(int index, const Sprites& sprites) const;
     void DrawTreeReflection(float tx, float ty, float r, int side) const;
     void DrawObstacles(const Sprites& sprites) const;
+    void DrawBridge(const Obstacle& o) const;
+    void DrawCritters() const;
     static void DrawFuelLabel(const Rectangle& depot);
 
     std::array<Strip, cfg::kStripCount>          strips_ {};
     std::array<Obstacle, cfg::kMaxObstacles>     obstacles_ {};
+    std::array<Beast, cfg::kMaxCritters>         critters_ {};
     float    scrollOffset_ {0.0f};   // 0 .. kStripH; sub-strip scroll position
     float    distance_     {0.0f};
     float    lastStep_     {0.0f};
+    float    fishTimer_    {0.0f};
     uint32_t nextSeed_     {0x9E3779B9u};
 
     Phase phase_        {Phase::Single};
@@ -116,5 +151,6 @@ private:
     int   islandGap_    {0};         // single strips still required before the next island
     float islandTarget_ {0.0f};      // full width of the island being built
     int   gunSpacing_   {0};         // strips to wait before another gun may be placed
+    int   bridgeGap_    {0};         // strips to wait before another bridge
     Tuning tuning_      {1.0f, true, cfg::kShellSpeed, cfg::kScrollSpeed, cfg::kRampDistance};
 };

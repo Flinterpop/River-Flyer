@@ -52,7 +52,7 @@ void Game::StartGame()
     effects_.Reset();
     shells_.Reset();
     terrain_.Reset(TuningFor(Diff()));
-    kills_ = 0; boatKills_ = 0; gunKills_ = 0;
+    kills_ = 0; boatKills_ = 0; gunKills_ = 0; stars_ = 0; bridges_ = 0; otters_ = 0;
     finalScore_ = 0; newRow_ = -1; shake_ = 0.0f;
 
     for (int i = 0; i < cfg::kMaxPilots; ++i) {
@@ -65,6 +65,7 @@ void Game::StartGame()
         p.lives = Diff().lives;
         p.fuel  = cfg::kFuelMax;
         p.grace = 0.0f; p.fireCooldown = 0.0f; p.foamTimer = 0.0f; p.refuelPump = -1;
+        p.shield = 0.0f; p.spread = 0.0f;
         assert(!terrain_.HitsBank(p.plane.Bounds()));   // must spawn in open water
     }
     state_ = State::Playing;
@@ -90,6 +91,7 @@ void Game::UpdateTitle(float dt)
     terrain_.Update(dt);
     effects_.Drift(terrain_.LastStep());
     effects_.Update(dt);
+    UpdateCritters(dt);
     demoX_ += cfg::kDemoSpeed * dt;
     if (demoX_ > static_cast<float>(cfg::kScreenW) + 100.0f) { demoX_ = -100.0f; }
 
@@ -206,6 +208,7 @@ void Game::UpdatePlaying(float dt)
     effects_.Update(dt);
     shells_.Update(dt);
     UpdateGuns(dt);
+    UpdateCritters(dt);
     ResolveBulletHits();
     for (Pilot& p : pilots_) { UpdatePilot(p, dt); }
     if (shake_ > 0.0f) { shake_ -= dt; }
@@ -225,6 +228,8 @@ void Game::UpdatePilot(Pilot& p, float dt)
         return;
     }
     p.plane.Update(dt, p.map);
+    if (p.shield > 0.0f) { p.shield -= dt; }
+    if (p.spread > 0.0f) { p.spread -= dt; }
     UpdateWake(p, dt);
     UpdateFiring(p, dt);
     if (p.grace > 0.0f) {
@@ -257,6 +262,10 @@ void Game::UpdateFiring(Pilot& p, float dt)
     if (p.fireCooldown > 0.0f) { return; }
     if (input::FireHeld(p.map)) {
         bullets_.Fire(p.plane.Muzzle());
+        if (p.spread > 0.0f) {
+            bullets_.Fire(p.plane.Muzzle(), -cfg::kSpreadVx);
+            bullets_.Fire(p.plane.Muzzle(),  cfg::kSpreadVx);
+        }
         audio_.Play(Audio::Sfx::Shoot);
         p.fireCooldown = cfg::kFireCooldown;
     }
@@ -297,6 +306,20 @@ void Game::UpdateGuns(float dt)
     if (terrain_.UpdateGuns(dt, targets, n, mayFire, shells_) > 0) { audio_.Play(Audio::Sfx::Thud); }
 }
 
+void Game::UpdateCritters(float dt)
+{
+    std::array<Vector2, cfg::kMaxPilots> planes {};
+    int n = 0;
+    for (const Pilot& p : pilots_) {
+        if (p.Flying()) { planes[static_cast<size_t>(n)] = p.plane.Centre(); ++n; }
+    }
+    const int spotted = terrain_.UpdateCritters(dt, planes, n);
+    if (spotted > 0 && state_ == State::Playing) {
+        otters_ += spotted;
+        audio_.Play(Audio::Sfx::Ding);
+    }
+}
+
 void Game::ResolveBulletHits()
 {
     // Bounded: kMaxBullets x kMaxObstacles checks at most.
@@ -304,38 +327,71 @@ void Game::ResolveBulletHits()
         if (!bullets_.Active(b)) { continue; }
         const int hit = terrain_.FindObstacle(bullets_.Bounds(b));
         if (hit < 0) { continue; }
-
         const Terrain::Obstacle& o = terrain_.ObstacleAt(hit);
-        const Effects::Style style = (o.kind == Terrain::Kind::Rock) ? Effects::Style::Rock : Effects::Style::Fuel;
-        effects_.Spawn(RectCentre(o.rect), style);
-        audio_.Play(Audio::Sfx::Pop);
-        if (o.kind == Terrain::Kind::Boat)     { ++boatKills_; }
-        else if (o.kind == Terrain::Kind::Gun) { ++gunKills_; }
-        else                                   { ++kills_; }
-        terrain_.RemoveObstacle(hit);
+        if (Terrain::IsPickup(o.kind)) { continue; }   // bullets pass through pickups
+
+        const Rectangle rect = o.rect;
+        const Terrain::Kind kind = o.kind;
+        const Vector2 at = (kind == Terrain::Kind::Bridge) ? Vector2 {bullets_.Bounds(b).x, rect.y + rect.height * 0.5f} : RectCentre(rect);
         bullets_.Kill(b);
+        if (!terrain_.DamageObstacle(hit)) {
+            effects_.Spawn(at, Effects::Style::Rock);   // chipped, still standing
+            audio_.Play(Audio::Sfx::Pop);
+            continue;
+        }
+        effects_.Spawn(RectCentre(rect), (kind == Terrain::Kind::Rock) ? Effects::Style::Rock : Effects::Style::Fuel);
+        if (kind == Terrain::Kind::Bridge) { effects_.Spawn(Vector2 {rect.x + rect.width * 0.25f, at.y}, Effects::Style::Plane);
+                                             effects_.Spawn(Vector2 {rect.x + rect.width * 0.75f, at.y}, Effects::Style::Plane); }
+        audio_.Play(Audio::Sfx::Pop);
+        if (kind == Terrain::Kind::Boat)        { ++boatKills_; }
+        else if (kind == Terrain::Kind::Gun)    { ++gunKills_; }
+        else if (kind == Terrain::Kind::Bridge) { ++bridges_; }
+        else                                    { ++kills_; }
     }
     assert(kills_ >= 0);
+}
+
+void Game::Collect(Pilot& p, int obstacle)
+{
+    assert(p.Flying() && obstacle >= 0);
+    const Terrain::Obstacle& o = terrain_.ObstacleAt(obstacle);
+    assert(Terrain::IsPickup(o.kind));
+    switch (o.kind) {
+        case Terrain::Kind::Star:   ++stars_; break;
+        case Terrain::Kind::Shield: p.shield = cfg::kShieldSeconds; break;
+        case Terrain::Kind::Spread: p.spread = cfg::kSpreadSeconds; break;
+        case Terrain::Kind::Life:   if (p.lives < cfg::kMaxLives) { ++p.lives; } break;
+        default: break;
+    }
+    effects_.Spawn(RectCentre(o.rect), Effects::Style::Plane);
+    audio_.Play(Audio::Sfx::Ding);
+    terrain_.RemoveObstacle(obstacle);
 }
 
 void Game::CheckPilotCrash(Pilot& p)
 {
     assert(p.Flying() && p.grace <= 0.0f);
     const Rectangle box = p.plane.Bounds();
+    const bool shielded = p.shield > 0.0f;
 
     const int shell = shells_.Find(box);
     if (shell >= 0) {
         shells_.Kill(shell);
         effects_.Spawn(p.plane.Centre(), Effects::Style::Rock);
-        audio_.Play(Audio::Sfx::Crunch);
-        BeginCrash(p, Player::CrashStyle::Roll);
-        return;
+        if (shielded) { audio_.Play(Audio::Sfx::Pop); }
+        else {
+            audio_.Play(Audio::Sfx::Crunch);
+            BeginCrash(p, Player::CrashStyle::Roll);
+            return;
+        }
     }
-    const int  hit  = terrain_.FindObstacle(box);
-    const bool solid = (hit >= 0) && (terrain_.ObstacleAt(hit).kind != Terrain::Kind::Fuel);   // rock, boat or gun
+    const int hit = terrain_.FindObstacle(box);
+    if (hit >= 0 && Terrain::IsPickup(terrain_.ObstacleAt(hit).kind)) { Collect(p, hit); return; }
+    const bool solid = (hit >= 0) && Terrain::IsSolid(terrain_.ObstacleAt(hit).kind);
     if (solid) {
         effects_.Spawn(RectCentre(terrain_.ObstacleAt(hit).rect), Effects::Style::Rock);
         terrain_.RemoveObstacle(hit);
+        if (shielded) { audio_.Play(Audio::Sfx::Pop); return; }   // the shield takes it
         audio_.Play(Audio::Sfx::Crunch);
         BeginCrash(p, Player::CrashStyle::Roll);
     } else if (terrain_.HitsBank(box)) {
@@ -430,7 +486,8 @@ bool Game::PilotVisible(const Pilot& p) const
 int Game::Score() const
 {
     const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill
-                    + boatKills_ * cfg::kPointsPerBoat + gunKills_ * cfg::kPointsPerGun;
+                    + boatKills_ * cfg::kPointsPerBoat + gunKills_ * cfg::kPointsPerGun
+                    + stars_ * cfg::kPointsPerStar + bridges_ * cfg::kPointsPerBridge;
     assert(score >= 0);
     return score;
 }
@@ -475,8 +532,23 @@ void Game::DrawWorld() const
     }
     shells_.Draw();
     bullets_.Draw(sprites_.Bullet());
-    for (const Pilot& p : pilots_) { p.plane.Draw(sprites_.Player(), PilotVisible(p)); }
+    for (const Pilot& p : pilots_) { p.plane.Draw(sprites_.Player(), PilotVisible(p)); if (p.Flying()) { DrawPowerUps(p); } }
     effects_.Draw();
+}
+
+void Game::DrawPowerUps(const Pilot& p) const
+{
+    assert(p.Flying());
+    const Vector2 c = p.plane.Centre();
+    if (p.shield > 0.0f) {
+        const float pulse = 0.85f + 0.15f * std::sin(static_cast<float>(GetTime()) * 8.0f);
+        const float fade  = (p.shield < 1.5f) ? p.shield / 1.5f : 1.0f;   // flickers out
+        DrawCircleV(c, 34.0f * pulse, Fade(Color {80, 160, 255, 255}, 0.25f * fade));
+        DrawCircleLines(static_cast<int>(c.x), static_cast<int>(c.y), 34.0f * pulse, Fade(Color {160, 220, 255, 255}, 0.8f * fade));
+    }
+    if (p.spread > 0.0f) {
+        DrawText(TextFormat("x3 %d", static_cast<int>(p.spread) + 1), static_cast<int>(c.x) + 22, static_cast<int>(c.y) - 24, 14, GOLD);
+    }
 }
 
 void Game::DrawDayNight() const
@@ -502,6 +574,9 @@ void Game::DrawHud() const
     DrawHudText(score, (cfg::kScreenW - MeasureText(score, 28)) / 2, 8, 28);
     const char* best = TextFormat("BEST %06d", scores_.Best());
     DrawHudText(best, (cfg::kScreenW - MeasureText(best, 16)) / 2, 40, 16);
+    const char* extras = TextFormat("Stars %d   Otters %d", stars_, otters_);
+    DrawHudText(extras, (cfg::kScreenW - MeasureText(extras, 16)) / 2, 60, 16);
+    DrawStageBanner();
 
     const Pilot& p1 = pilots_[0];
     DrawHudText(p1.name.data(), 10, 8, 20);
@@ -541,6 +616,18 @@ void Game::DrawLives(const Pilot& p, int x, int y, bool rightToLeft) const
         const float px = rightToLeft ? static_cast<float>(x - spacing * (i + 1)) : static_cast<float>(x + spacing * i);
         Sprites::DrawInto(sprites_.Player(), px, static_cast<float>(y), cfg::kPlayerW, cfg::kPlayerH, WHITE);
     }
+}
+
+void Game::DrawStageBanner() const
+{
+    const float prog = terrain_.StageProgress();
+    if (prog > cfg::kStageBanner || terrain_.Distance() < 1.0f) { return; }
+    const float fade = (prog < 60.0f) ? prog / 60.0f : ((cfg::kStageBanner - prog) < 120.0f ? (cfg::kStageBanner - prog) / 120.0f : 1.0f);
+    const int   lap  = static_cast<int>(terrain_.Distance() / cfg::kStageLength);
+    const char* text = TextFormat("STAGE %d: %s", lap + 1, cfg::kStages[terrain_.StageIndex()].name);
+    const int   w    = MeasureText(text, 40);
+    DrawText(text, (cfg::kScreenW - w) / 2 + 3, 133, 40, Fade(BLACK, 0.6f * fade));
+    DrawText(text, (cfg::kScreenW - w) / 2, 130, 40, Fade(GOLD, fade));
 }
 
 void Game::DrawRefuelling(const Pilot& p) const
@@ -677,6 +764,7 @@ void Game::DrawGameOver() const
     DrawRectangleLines(px, py, panelW, panelH, GOLD);
     DrawText(msg1, (cfg::kScreenW - MeasureText(msg1, 30)) / 2, py + 16, 30, GOLD);
     DrawText(TextFormat("Your score: %06d%s", finalScore_, (newRow_ >= 0) ? "  - new high score!" : ""), px + 30, py + 60, 18, RAYWHITE);
+    DrawText(TextFormat("Stars %d   Bridges %d   Otters spotted %d", stars_, bridges_, otters_), px + 30, py + 80, 16, LIGHTGRAY);
     DrawScoreTable(px + 30, py + 100);
     DrawText(msg2, (cfg::kScreenW - MeasureText(msg2, 22)) / 2, py + panelH - 40, 22, RAYWHITE);
 }

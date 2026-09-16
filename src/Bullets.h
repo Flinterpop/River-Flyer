@@ -10,7 +10,7 @@
 class Bullets {
 public:
     void Reset();
-    void Fire(Vector2 muzzle);           // silently drops the shot if the pool is full
+    void Fire(Vector2 muzzle, float vx = 0.0f);   // silently drops the shot if the pool is full
     void Update(float dt);
     void Draw(const Texture2D& tex) const;
 
@@ -23,6 +23,7 @@ public:
 private:
     struct Bullet {
         Rectangle rect;
+        float     vx;
         bool      active;
     };
     std::array<Bullet, cfg::kMaxBullets> pool_ {};

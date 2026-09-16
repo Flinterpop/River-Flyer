@@ -2,6 +2,8 @@
 // that no container in the game needs to grow at run time.
 #pragma once
 
+#include "raylib.h"
+
 namespace cfg {
 
 // Version: keep in lockstep with vcpkg.json and the README badge.
@@ -202,6 +204,60 @@ constexpr float kNightAlpha     = 0.38f;
 
 // Title screen demo plane.
 constexpr float kDemoSpeed      = 160.0f;                            // px per second across the title
+
+// Stages: the scenery shifts every kStageLength px; tints multiply the
+// base textures so no extra art is needed. Blends over kStageBlend px.
+struct Stage {
+    const char* name;
+    Color land;
+    Color water;
+    Color tree;
+    float treeScaleX;      // cactus: narrow and tall
+    float treeScaleY;
+    float treeChance;      // multiplies kTreeChance
+    Color sand;
+    Color rock;
+};
+constexpr int   kStageCount  = 4;
+constexpr float kStageLength = 6000.0f;
+constexpr float kStageBlend  = 600.0f;
+constexpr float kStageBanner = 500.0f;                               // px over which the stage name shows
+constexpr Stage kStages[kStageCount] = {
+    { "FOREST",   {255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, 1.0f, 1.0f, 1.0f, {214, 196, 140, 255}, {255, 255, 255, 255} },
+    { "FARMLAND", {235, 240, 150, 255}, {235, 245, 255, 255}, {215, 255, 170, 255}, 1.1f, 0.9f, 0.45f, {225, 205, 150, 255}, {255, 255, 255, 255} },
+    { "CANYON",   {240, 195, 130, 255}, {170, 235, 225, 255}, {130, 205, 95, 255},  0.5f, 1.7f, 0.55f, {235, 190, 120, 255}, {225, 160, 120, 255} },
+    { "SNOW",     {240, 245, 255, 255}, {165, 190, 255, 255}, {175, 205, 215, 255}, 1.0f, 1.2f, 0.7f,  {225, 230, 240, 255}, {235, 245, 255, 255} },
+};
+
+// Critters: harmless wildlife.
+constexpr int   kMaxCritters    = 14;
+constexpr int   kDuckChance     = 6;                                 // percent per new strip
+constexpr int   kDeerChance     = 5;
+constexpr int   kOtterChance    = 2;
+constexpr float kFishInterval   = 3.0f;                              // seconds between jump chances
+constexpr float kFishJumpSecs   = 0.8f;
+constexpr float kDuckSpeed      = 22.0f;                             // px per second
+constexpr float kOtterSpeed     = 40.0f;
+constexpr float kOtterSpotRange = 80.0f;                             // fly this close to spot one
+
+// Collectables and power-ups (spawned like obstacles, picked up on contact).
+constexpr int   kStarChance     = 6;                                 // percent per new strip
+constexpr int   kShieldChance   = 2;
+constexpr int   kSpreadChance   = 2;
+constexpr int   kLifeChance     = 1;
+constexpr float kPickupSize     = 26.0f;
+constexpr int   kPointsPerStar  = 50;
+constexpr float kShieldSeconds  = 7.0f;
+constexpr float kSpreadSeconds  = 10.0f;
+constexpr float kSpreadVx       = 110.0f;                            // sideways speed of the outer bullets
+constexpr int   kMaxLives       = 9;
+
+// Bridges: span a single channel; shoot them open (kBridgeHp hits) or crash.
+constexpr int   kBridgeChance   = 4;                                 // percent per single-channel strip
+constexpr int   kBridgeGap      = 10;                                // strips between bridges
+constexpr float kBridgeH        = 22.0f;
+constexpr int   kBridgeHp       = 3;
+constexpr int   kPointsPerBridge = 500;
 
 // HUD.
 constexpr int   kFuelBarW     = 200;

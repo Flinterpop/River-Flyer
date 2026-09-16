@@ -19,6 +19,7 @@ public:
         Brake,    // drag chute hiss
         Fanfare,  // new high score
         Thud,     // island gun firing
+        Ding,     // pickup collected
         Count
     };
 
@@ -42,6 +43,7 @@ private:
     static Sound GenBrake();
     static Sound GenFanfare();
     static Sound GenThud();
+    static Sound GenDing();
 
     bool                       ready_ {false};
     std::array<Sound, kCount>  bank_ {};

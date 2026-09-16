@@ -20,6 +20,8 @@ struct Pilot {
     float foamTimer    {0.0f};
     int   refuelPump   {-1};      // obstacle index being drawn from, or -1
     bool  out          {false};   // no planes left
+    float shield       {0.0f};    // seconds of shield bubble left
+    float spread       {0.0f};    // seconds of three-way fire left
 
     bool Active() const { return !out; }
     bool Flying() const { return !out && !plane.Crashing(); }

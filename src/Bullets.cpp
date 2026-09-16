@@ -8,17 +8,19 @@ void Bullets::Reset()
 {
     for (Bullet& b : pool_) {
         b.active = false;
+        b.vx     = 0.0f;
         b.rect   = Rectangle {0.0f, 0.0f, cfg::kBulletW, cfg::kBulletH};
     }
 }
 
-void Bullets::Fire(Vector2 muzzle)
+void Bullets::Fire(Vector2 muzzle, float vx)
 {
     assert(muzzle.x >= 0.0f && muzzle.x <= static_cast<float>(cfg::kScreenW));
     for (Bullet& b : pool_) {
         if (b.active) { continue; }
         b.rect.x = muzzle.x - cfg::kBulletW * 0.5f;
         b.rect.y = muzzle.y - cfg::kBulletH;
+        b.vx     = vx;
         b.active = true;
         return;
     }
@@ -30,7 +32,8 @@ void Bullets::Update(float dt)
     for (Bullet& b : pool_) {
         if (!b.active) { continue; }
         b.rect.y -= cfg::kBulletSpeed * dt;
-        if (b.rect.y + b.rect.height < 0.0f) { b.active = false; }
+        b.rect.x += b.vx * dt;
+        if (b.rect.y + b.rect.height < 0.0f || b.rect.x < -20.0f || b.rect.x > static_cast<float>(cfg::kScreenW) + 20.0f) { b.active = false; }
     }
 }
 

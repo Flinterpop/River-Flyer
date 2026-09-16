@@ -119,6 +119,7 @@ Sprites::Sprites()
     for (int v = 0; v < cfg::kTreeVariants; ++v) { trees_[static_cast<size_t>(v)] = GenTree(v); }
     boat_   = GenBoat();
     gun_    = GenGun();
+    for (int i = 0; i < 4; ++i) { pickups_[static_cast<size_t>(i)] = GenPickup(i); }
     assert(player_.id != 0 && rock_.id != 0 && fuel_.id != 0 && bullet_.id != 0);
     assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0 && gun_.id != 0);
 }
@@ -131,6 +132,7 @@ const Texture2D& Sprites::Tree(int variant) const
 
 Sprites::~Sprites()
 {
+    for (Texture2D& t : pickups_) { UnloadTexture(t); }
     UnloadTexture(gun_);
     UnloadTexture(boat_);
     for (Texture2D& t : trees_) { UnloadTexture(t); }
@@ -384,6 +386,58 @@ Texture2D Sprites::GenGun()
     ImageDrawRectangle(&img, static_cast<int>(c) + 2, 0, 4, static_cast<int>(c), Color {40, 42, 40, 255});
     ImageDrawRectangle(&img, static_cast<int>(c) - 7, 0, 14, 4, Color {20, 20, 20, 255});
 
+    return Upload(img);
+}
+
+// ---- pickups ----------------------------------------------------------------
+
+const Texture2D& Sprites::Pickup(int which) const
+{
+    assert(which >= 0 && which < 4);
+    return pickups_[static_cast<size_t>(which)];
+}
+
+// 0: gold star. 1: blue shield bubble. 2: three-way spread arrows. 3: extra plane.
+Texture2D Sprites::GenPickup(int which)
+{
+    assert(which >= 0 && which < 4);
+    const int   n = static_cast<int>(cfg::kPickupSize) * S;   // 52
+    const float c = static_cast<float>(n) * 0.5f;
+    Image img = GenImageColor(n, n, BLANK);
+
+    if (which == 0) {
+        // Five-point star from a fan of triangles.
+        Vector2 pts[10];
+        for (int i = 0; i < 10; ++i) {
+            const float a = -1.5708f + static_cast<float>(i) * 0.6283f;
+            const float r = (i % 2 == 0) ? c - 2.0f : (c - 2.0f) * 0.45f;
+            pts[i] = Vector2 {c + std::cos(a) * r, c + std::sin(a) * r};
+        }
+        for (int i = 0; i < 10; ++i) {
+            ImageDrawTriangle(&img, Vector2 {c, c}, pts[i], pts[(i + 1) % 10], (i % 2 == 0) ? GOLD : Color {255, 220, 90, 255});
+        }
+        ImageDrawCircleV(&img, Vector2 {c - 4.0f, c - 6.0f}, 3, RAYWHITE);
+    } else if (which == 1) {
+        ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 2.0f), Color {60, 140, 240, 200});
+        ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 8.0f), Color {120, 190, 255, 200});
+        ImageDrawCircleV(&img, Vector2 {c - 7.0f, c - 8.0f}, 5, Fade(RAYWHITE, 0.8f));
+        ImageDrawText(&img, "S", static_cast<int>(c) - 6, static_cast<int>(c) - 10, 20, DARKBLUE);
+    } else if (which == 2) {
+        ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 2.0f), Color {255, 200, 60, 230});
+        for (int k = -1; k <= 1; ++k) {
+            const float a  = static_cast<float>(k) * 0.55f;
+            const Vector2 tip {c + std::sin(a) * (c - 8.0f), c - std::cos(a) * (c - 8.0f)};
+            ImageDrawLineEx(&img, Vector2 {c, c + 8.0f}, tip, 3, MAROON);
+            ImageDrawCircleV(&img, tip, 3, MAROON);
+        }
+    } else {
+        ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 2.0f), Color {240, 240, 240, 230});
+        ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 6.0f), Color {255, 120, 140, 255});
+        // A little plane silhouette: fuselage and wings.
+        ImageDrawRectangle(&img, static_cast<int>(c) - 3, static_cast<int>(c) - 14, 6, 26, RAYWHITE);
+        ImageDrawTriangle(&img, Vector2 {c - 3.0f, c - 2.0f}, Vector2 {c - 16.0f, c + 8.0f}, Vector2 {c - 3.0f, c + 6.0f}, RAYWHITE);
+        ImageDrawTriangle(&img, Vector2 {c + 3.0f, c - 2.0f}, Vector2 {c + 3.0f, c + 6.0f}, Vector2 {c + 16.0f, c + 8.0f}, RAYWHITE);
+    }
     return Upload(img);
 }
 

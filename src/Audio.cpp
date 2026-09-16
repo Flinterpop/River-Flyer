@@ -79,6 +79,7 @@ Audio::Audio()
     bank_[static_cast<size_t>(Sfx::Brake)]  = GenBrake();
     bank_[static_cast<size_t>(Sfx::Fanfare)] = GenFanfare();
     bank_[static_cast<size_t>(Sfx::Thud)]    = GenThud();
+    bank_[static_cast<size_t>(Sfx::Ding)]    = GenDing();
     assert(bank_.front().frameCount > 0 && bank_.back().frameCount > 0);
 }
 
@@ -233,6 +234,21 @@ Sound Audio::GenThud()
         const float thump = std::sin(kTwoPi * (90.0f - 40.0f * u) * t) * std::exp(-7.0f * u);
         const float click = Noise() * std::exp(-40.0f * u);
         g_scratch[static_cast<size_t>(i)] = (0.8f * thump + 0.4f * click) * 0.7f;
+    }
+    return Commit(frames);
+}
+
+// Ding: a bright bell - two harmonics with a fast attack and a long ring.
+Sound Audio::GenDing()
+{
+    const float dur    = 0.5f;
+    const int   frames = FramesFor(dur);
+    for (int i = 0; i < frames; ++i) {
+        const float t = TimeOf(i);
+        const float u = t / dur;
+        const float env = std::exp(-5.0f * u);
+        const float s = std::sin(kTwoPi * 1318.5f * t) * 0.7f + std::sin(kTwoPi * 1976.0f * t) * 0.3f;
+        g_scratch[static_cast<size_t>(i)] = s * env * 0.35f;
     }
     return Commit(frames);
 }
