@@ -28,6 +28,7 @@ private:
     void FinishGame();               // Crashing -> EnterName or GameOver
     void CommitName();
     void UpdateFiring(float dt);
+    void UpdateWake(float dt);
     bool UpdateFuel(float dt);            // true when the tank has just run dry
     void ResolveBulletHits();
     void CheckPlayerCrash();
@@ -43,6 +44,7 @@ private:
     void DrawGameOver() const;
     void DrawEnterName() const;
     void DrawScoreTable(int x, int y) const;
+    void DrawRefuelling() const;
     void DrawPeekTable() const;
 
     Audio   audio_;
@@ -56,8 +58,11 @@ private:
 
     int   lives_        {0};
     int   kills_        {0};
+    int   boatKills_    {0};
+    int   refuelPump_   {-1};     // obstacle index being drawn from, or -1
     float fuel_         {0.0f};
     float fireCooldown_ {0.0f};   // seconds until the next shot is allowed
+    float foamTimer_    {0.0f};   // seconds until the next wake puff pair
     float grace_        {0.0f};   // seconds of invulnerability left after a respawn
     int   finalScore_   {0};      // frozen at the moment the last plane is lost
     int   newRow_       {-1};     // row of the entry just added, or -1

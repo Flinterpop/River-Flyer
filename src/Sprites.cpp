@@ -116,12 +116,22 @@ Sprites::Sprites()
     bullet_ = GenBullet();
     water_  = GenWater();
     grass_  = GenGrass();
+    for (int v = 0; v < cfg::kTreeVariants; ++v) { trees_[static_cast<size_t>(v)] = GenTree(v); }
+    boat_   = GenBoat();
     assert(player_.id != 0 && rock_.id != 0 && fuel_.id != 0 && bullet_.id != 0);
-    assert(water_.id != 0 && grass_.id != 0);
+    assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0);
+}
+
+const Texture2D& Sprites::Tree(int variant) const
+{
+    assert(variant >= 0 && variant < cfg::kTreeVariants);
+    return trees_[static_cast<size_t>(variant)];
 }
 
 Sprites::~Sprites()
 {
+    UnloadTexture(boat_);
+    for (Texture2D& t : trees_) { UnloadTexture(t); }
     UnloadTexture(grass_);
     UnloadTexture(water_);
     UnloadTexture(bullet_);
@@ -273,6 +283,82 @@ Texture2D Sprites::GenBullet()
     ImageDrawRectangle(&img, 0, 2, w, h - 2, Color {255, 150, 40, 200});   // orange glow
     ImageDrawRectangle(&img, 2, 0, w - 4, h - 4, YELLOW);                    // hot core
     ImageDrawRectangle(&img, 3, 0, w - 6, 6, RAYWHITE);                      // white tip
+    return Upload(img);
+}
+
+// ---- trees ------------------------------------------------------------------
+
+// A canopy seen from above: a dark base disc, a ring of leaf clumps lit from
+// the top-left, and a bright crown. Variant 0 is round, 1 is bushier.
+Texture2D Sprites::GenTree(int variant)
+{
+    assert(variant >= 0 && variant < cfg::kTreeVariants);
+    const int   n  = 48;
+    const float c  = static_cast<float>(n) * 0.5f;
+    const float R  = c - 2.0f;
+    Image img = GenImageColor(n, n, BLANK);
+
+    const Color base  {18, 70, 26, 255};
+    const Color mid   {34, 108, 40, 255};
+    const Color light {70, 150, 58, 255};
+    const Color crown {110, 185, 80, 255};
+
+    ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(R), base);
+
+    // Leaf clumps around the rim; lit side gets the lighter shade.
+    const int   clumps = (variant == 0) ? 7 : 10;
+    const float bump   = (variant == 0) ? 0.30f : 0.42f;
+    for (int k = 0; k < clumps; ++k) {
+        const float a  = 6.28318f * static_cast<float>(k) / static_cast<float>(clumps) + static_cast<float>(variant) * 0.4f;
+        const float rr = R * (0.62f + bump * 0.5f * ((k % 2 == 0) ? 1.0f : 0.6f));
+        const float cx = c + std::cos(a) * R * 0.55f;
+        const float cy = c + std::sin(a) * R * 0.55f;
+        const float lit = -std::cos(a) * 0.5f - std::sin(a) * 0.6f;   // towards top-left
+        const Color col = (lit > 0.15f) ? light : ((lit > -0.3f) ? mid : base);
+        ImageDrawCircleV(&img, Vector2 {cx, cy}, static_cast<int>(rr * 0.55f), col);
+    }
+    // Crown highlight offset to the light.
+    ImageDrawCircleV(&img, Vector2 {c - R * 0.22f, c - R * 0.25f}, static_cast<int>(R * 0.42f), light);
+    ImageDrawCircleV(&img, Vector2 {c - R * 0.28f, c - R * 0.32f}, static_cast<int>(R * 0.2f), crown);
+
+    return Upload(img);
+}
+
+// ---- boat -------------------------------------------------------------------
+
+// Small motor launch seen from above, bow to the right: white hull with a
+// dark gunwale, a cabin amidships and a windscreen.
+Texture2D Sprites::GenBoat()
+{
+    const int w = static_cast<int>(cfg::kBoatW) * S;   // 88
+    const int h = static_cast<int>(cfg::kBoatH) * S;   // 40
+    Image img = GenImageColor(w, h, BLANK);
+    const float cy = static_cast<float>(h) * 0.5f;
+
+    const Color hull    {235, 235, 228, 255};
+    const Color hullLo  {190, 190, 180, 255};
+    const Color gunwale {70, 50, 30, 255};
+    const Color cabin   {120, 80, 45, 255};
+    const Color roof    {160, 110, 60, 255};
+
+    // Hull: a rectangle body with a pointed bow (right) and squared stern (left).
+    ImageDrawRectangle(&img, 6, 6, w - 30, h - 12, hull);
+    ImageDrawRectangle(&img, 6, static_cast<int>(cy), w - 30, h / 2 - 6, hullLo);   // shaded lower half
+    ImageDrawTriangle(&img, Vector2 {static_cast<float>(w - 24), 6.0f}, Vector2 {static_cast<float>(w - 2), cy}, Vector2 {static_cast<float>(w - 24), cy}, hull);
+    ImageDrawTriangle(&img, Vector2 {static_cast<float>(w - 24), cy}, Vector2 {static_cast<float>(w - 2), cy}, Vector2 {static_cast<float>(w - 24), static_cast<float>(h - 6)}, hullLo);
+    // Gunwale outline.
+    ImageDrawLineEx(&img, Vector2 {6.0f, 6.0f}, Vector2 {static_cast<float>(w - 24), 6.0f}, 2, gunwale);
+    ImageDrawLineEx(&img, Vector2 {6.0f, static_cast<float>(h - 6)}, Vector2 {static_cast<float>(w - 24), static_cast<float>(h - 6)}, 2, gunwale);
+    ImageDrawLineEx(&img, Vector2 {static_cast<float>(w - 24), 6.0f}, Vector2 {static_cast<float>(w - 2), cy}, 2, gunwale);
+    ImageDrawLineEx(&img, Vector2 {static_cast<float>(w - 24), static_cast<float>(h - 6)}, Vector2 {static_cast<float>(w - 2), cy}, 2, gunwale);
+    ImageDrawLineEx(&img, Vector2 {6.0f, 6.0f}, Vector2 {6.0f, static_cast<float>(h - 6)}, 2, gunwale);
+    // Cabin with roof highlight and windscreen towards the bow.
+    ImageDrawRectangle(&img, 26, 11, 30, h - 22, cabin);
+    ImageDrawRectangle(&img, 28, 13, 26, 6, roof);
+    ImageDrawRectangle(&img, 52, 12, 4, h - 24, Color {120, 190, 250, 255});
+    // Outboard motor at the stern.
+    ImageDrawRectangle(&img, 0, static_cast<int>(cy) - 4, 8, 8, DARKGRAY);
+
     return Upload(img);
 }
 

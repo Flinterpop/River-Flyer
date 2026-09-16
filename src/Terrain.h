@@ -17,7 +17,7 @@
 // smooth shoreline rather than 32 px steps.
 class Terrain {
 public:
-    enum class Kind { Rock, Fuel };
+    enum class Kind { Rock, Fuel, Boat };
 
     struct Strip {
         float    centreX;   // river centre line at the top edge, screen space
@@ -28,6 +28,7 @@ public:
     struct Obstacle {
         Rectangle rect;
         Kind      kind;
+        float     dir;      // boats: -1 or +1, the way it is crossing
         bool      active;
     };
 
@@ -45,6 +46,9 @@ public:
     const Obstacle& ObstacleAt(int i) const;
     void            RemoveObstacle(int i);
 
+    // Pixels scrolled by the most recent Update().
+    float LastStep() const { return lastStep_; }
+
     // Total distance scrolled since Reset, in pixels.
     float Distance() const { return distance_; }
 
@@ -56,13 +60,16 @@ private:
     void  ShiftStripsDown();
     void  TrySpawnObstacle(const Strip& strip);
     void  PlaceObstacle(const Strip& strip, Kind kind);
+    void  MoveBoat(Obstacle& o, float dt);
 
     float StripTopY(int index) const;                 // screen y of a strip's top edge
     void  BankAt(float y, float& left, float& right) const;   // interpolated bank x at screen y
 
     void DrawWater(const Sprites& sprites) const;
     void DrawShore() const;
-    void DrawTrees(int index) const;
+    void DrawShallows() const;
+    void DrawTrees(int index, const Sprites& sprites) const;
+    void DrawTreeReflection(float tx, float ty, float r, int side) const;
     void DrawObstacles(const Sprites& sprites) const;
     static void DrawFuelLabel(const Rectangle& depot);
 
@@ -70,5 +77,6 @@ private:
     std::array<Obstacle, cfg::kMaxObstacles>     obstacles_ {};
     float    scrollOffset_ {0.0f};   // 0 .. kStripH; sub-strip scroll position
     float    distance_     {0.0f};
+    float    lastStep_     {0.0f};
     uint32_t nextSeed_     {0x9E3779B9u};
 };

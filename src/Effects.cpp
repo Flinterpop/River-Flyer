@@ -17,6 +17,40 @@ void Effects::Reset()
         b.centre = Vector2 {0.0f, 0.0f};
         b.style  = Style::Rock;
     }
+    for (Foam& f : foam_) {
+        f.active = false;
+        f.age    = 0.0f;
+        f.vx     = 0.0f;
+        f.pos    = Vector2 {0.0f, 0.0f};
+    }
+}
+
+void Effects::SpawnFoam(Vector2 pos, float vx)
+{
+    assert(pos.y > -50.0f && pos.y < static_cast<float>(cfg::kScreenH) + 50.0f);
+    for (Foam& f : foam_) {
+        if (f.active) { continue; }
+        f.pos = pos; f.vx = vx; f.age = 0.0f; f.active = true;
+        return;
+    }
+}
+
+void Effects::Drift(float dy)
+{
+    assert(dy >= 0.0f);
+    for (Foam& f : foam_) {
+        if (f.active) { f.pos.y += dy; }
+    }
+}
+
+void Effects::DrawFoam() const
+{
+    for (const Foam& f : foam_) {
+        if (!f.active) { continue; }
+        const float t = f.age / cfg::kFoamSeconds;
+        assert(t >= 0.0f && t < 1.0f);
+        DrawCircleV(f.pos, cfg::kFoamR * (0.6f + 0.8f * t), Fade(RAYWHITE, 0.55f * (1.0f - t)));
+    }
 }
 
 void Effects::Spawn(Vector2 centre, Style style)
@@ -39,6 +73,12 @@ void Effects::Update(float dt)
         if (!b.active) { continue; }
         b.age += dt;
         if (b.age >= cfg::kBurstSeconds) { b.active = false; }
+    }
+    for (Foam& f : foam_) {
+        if (!f.active) { continue; }
+        f.age   += dt;
+        f.pos.x += f.vx * dt;
+        if (f.age >= cfg::kFoamSeconds || f.pos.y > static_cast<float>(cfg::kScreenH) + 10.0f) { f.active = false; }
     }
 }
 

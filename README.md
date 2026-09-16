@@ -21,7 +21,7 @@ Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-late
 | Key | Action |
 |---|---|
 | W A S D / arrows | Fly. Up lights the afterburner, down pops a drag chute that slows the river |
-| Space | Shoot. Rocks and fuel pumps both go down for 100 points |
+| Space | Shoot. Rocks and fuel pumps are 100 points, boats 200 |
 | Space / R / Enter | Fly again after losing the last plane |
 | Letters, Backspace, Enter | Type your name when you make the top ten |
 | Tab (hold) | Peek at the top-ten table mid-game |
@@ -32,7 +32,8 @@ Notes:
 
 - Fuel burns steadily and the bar top-left goes red below a quarter. Fly over a red **FUEL** pump to refill; you keep refilling as long as you sit on it.
 - Score is distance plus 100 per kill. The river speeds up gently with distance, to at most double speed.
-- Hitting a rock rolls the plane into the water; hitting the bank or running dry spirals it in. Either way it costs one plane.
+- Boats cross the river back and forth; hitting one is as bad as hitting a rock.
+- Hitting a rock or boat rolls the plane into the water; hitting the bank or running dry spirals it in. Either way it costs one plane.
 - Top-ten scores with names are kept in `highscores.txt` next to the exe (delete it to start fresh). The name box remembers the last name typed, so a returning player just presses Enter. `BEST` at the top of the screen is the current record.
 
 ## Build
@@ -63,9 +64,9 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Config.h` | Every tunable: sizes, speeds, spawn chances, animation and sound parameters, version |
 | `src/Game.*` | State machine (Playing, Crashing, GameOver), collisions, fuel, score, HUD |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
-| `src/Terrain.*` | River strips that scroll down with random drift, banks interpolated between strips, sand shoreline, trees; rock and fuel-pump pool |
+| `src/Terrain.*` | River strips that scroll down with random drift, banks interpolated between strips, sand shoreline, shallows, trees with reflections; pool of rocks, fuel pumps and crossing boats |
 | `src/Bullets.*` | Fixed bullet pool |
-| `src/Effects.*` | Fixed pool of particle bursts (rock, fuel, plane, splash) |
+| `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash) and wake foam |
 | `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
 | `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare |
 | `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |

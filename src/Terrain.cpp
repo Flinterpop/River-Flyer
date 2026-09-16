@@ -43,10 +43,12 @@ void Terrain::Reset()
 {
     scrollOffset_ = 0.0f;
     distance_     = 0.0f;
+    lastStep_     = 0.0f;
 
     for (Obstacle& o : obstacles_) {
         o.active = false;
         o.kind   = Kind::Rock;
+        o.dir    = 1.0f;
         o.rect   = Rectangle {0.0f, 0.0f, 0.0f, 0.0f};
     }
 
@@ -96,19 +98,23 @@ void Terrain::ShiftStripsDown()
 
 void Terrain::TrySpawnObstacle(const Strip& strip)
 {
-    assert(cfg::kRockChance >= 0 && cfg::kRockChance + cfg::kFuelChance <= 100);
+    assert(cfg::kRockChance >= 0 && cfg::kRockChance + cfg::kFuelChance + cfg::kBoatChance <= 100);
     const int roll = GetRandomValue(1, 100);
     if (roll <= cfg::kRockChance) {
         PlaceObstacle(strip, Kind::Rock);
     } else if (roll <= cfg::kRockChance + cfg::kFuelChance) {
         PlaceObstacle(strip, Kind::Fuel);
+    } else if (roll <= cfg::kRockChance + cfg::kFuelChance + cfg::kBoatChance) {
+        PlaceObstacle(strip, Kind::Boat);
     }
 }
 
 void Terrain::PlaceObstacle(const Strip& strip, Kind kind)
 {
+    const float w    = (kind == Kind::Boat) ? cfg::kBoatW : cfg::kObstacleW;
+    const float h    = (kind == Kind::Boat) ? cfg::kBoatH : cfg::kObstacleH;
     const float minX = strip.centreX - strip.width * 0.5f + cfg::kObstacleInset;
-    const float maxX = strip.centreX + strip.width * 0.5f - cfg::kObstacleW - cfg::kObstacleInset;
+    const float maxX = strip.centreX + strip.width * 0.5f - w - cfg::kObstacleInset;
     assert(minX < maxX);
 
     // Find a free slot; the pool is fixed so give up if it is full.
@@ -116,12 +122,26 @@ void Terrain::PlaceObstacle(const Strip& strip, Kind kind)
         if (o.active) { continue; }
         o.rect = Rectangle {
             static_cast<float>(GetRandomValue(static_cast<int>(minX), static_cast<int>(maxX))),
-            -cfg::kObstacleH,            // just above the window, scrolls into view
-            cfg::kObstacleW, cfg::kObstacleH};
+            -h,                          // just above the window, scrolls into view
+            w, h};
         o.kind   = kind;
+        o.dir    = (GetRandomValue(0, 1) == 0) ? -1.0f : 1.0f;
         o.active = true;
         return;
     }
+}
+
+void Terrain::MoveBoat(Obstacle& o, float dt)
+{
+    assert(o.active && o.kind == Kind::Boat && dt >= 0.0f);
+    o.rect.x += o.dir * cfg::kBoatSpeed * dt;
+    // Turn around a little short of each bank; clamp so it never sits on land.
+    float left = 0.0f, right = 0.0f;
+    BankAt(o.rect.y + o.rect.height * 0.5f, left, right);
+    const float margin = 6.0f;
+    if (o.rect.x < left + margin)                { o.rect.x = left + margin;  o.dir = 1.0f; }
+    if (o.rect.x + o.rect.width > right - margin) { o.rect.x = right - margin - o.rect.width; o.dir = -1.0f; }
+    assert(o.dir == 1.0f || o.dir == -1.0f);
 }
 
 void Terrain::Update(float dt)
@@ -130,6 +150,7 @@ void Terrain::Update(float dt)
     const float step = ScrollSpeed() * dt;
     distance_     += step;
     scrollOffset_ += step;
+    lastStep_      = step;
 
     // A single frame never scrolls more than a few strips; bound the loop anyway.
     for (int guard = 0; guard < 8 && scrollOffset_ >= static_cast<float>(cfg::kStripH); ++guard) {
@@ -141,7 +162,8 @@ void Terrain::Update(float dt)
     for (Obstacle& o : obstacles_) {
         if (!o.active) { continue; }
         o.rect.y += step;
-        if (o.rect.y > static_cast<float>(cfg::kScreenH)) { o.active = false; }
+        if (o.rect.y > static_cast<float>(cfg::kScreenH)) { o.active = false; continue; }
+        if (o.kind == Kind::Boat && o.rect.y > 0.0f) { MoveBoat(o, dt); }
     }
 }
 
@@ -197,8 +219,9 @@ void Terrain::Draw(const Sprites& sprites) const
                    Rectangle {0.0f, 0.0f, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kScreenH)},
                    Vector2 {0.0f, 0.0f}, 0.0f, WHITE);
     DrawWater(sprites);
+    DrawShallows();
     DrawShore();
-    for (int i = 0; i < cfg::kStripCount; ++i) { DrawTrees(i); }
+    for (int i = 0; i < cfg::kStripCount; ++i) { DrawTrees(i, sprites); }
     DrawObstacles(sprites);
 }
 
@@ -215,6 +238,36 @@ void Terrain::DrawWater(const Sprites& sprites) const
         const Rectangle src {left, fy + scroll, right - left, h};
         DrawTexturePro(sprites.Water(), src, Rectangle {left, fy, right - left, h}, Vector2 {0.0f, 0.0f}, 0.0f, WHITE);
     }
+}
+
+void Terrain::DrawShallows() const
+{
+    // A greenish, slightly darker band of shallow water hugging each bank.
+    const float h = static_cast<float>(cfg::kSliceH);
+    for (int y = -cfg::kSliceH; y < cfg::kScreenH; y += cfg::kSliceH) {
+        const float fy = static_cast<float>(y);
+        float left = 0.0f, right = 0.0f;
+        BankAt(fy + h * 0.5f, left, right);
+        const float w = cfg::kShallowW;
+        DrawRectangleGradientH(static_cast<int>(left), static_cast<int>(fy), static_cast<int>(w), cfg::kSliceH,
+                               Fade(Color {30, 90, 60, 255}, 0.35f), Fade(Color {30, 90, 60, 255}, 0.0f));
+        DrawRectangleGradientH(static_cast<int>(right - w), static_cast<int>(fy), static_cast<int>(w), cfg::kSliceH,
+                               Fade(Color {30, 90, 60, 255}, 0.0f), Fade(Color {30, 90, 60, 255}, 0.35f));
+    }
+}
+
+void Terrain::DrawTreeReflection(float tx, float ty, float r, int side) const
+{
+    assert(side == 0 || side == 1);
+    float left = 0.0f, right = 0.0f;
+    BankAt(ty, left, right);
+    const float bank = (side == 0) ? left : right;
+    const float gap  = (side == 0) ? (bank - tx) : (tx - bank);   // tree centre to shoreline
+    if (gap > cfg::kReflectReach) { return; }
+    // Mirror across the shoreline; the water side gets a stretched, faint smudge.
+    const float rx = (side == 0) ? (bank + gap) : (bank - gap);
+    const float fade = 0.28f * (1.0f - gap / cfg::kReflectReach);
+    DrawEllipse(static_cast<int>(rx), static_cast<int>(ty + 2.0f), r * 0.9f, r * 1.5f, Fade(kTreeDark, fade));
 }
 
 void Terrain::DrawShore() const
@@ -237,7 +290,7 @@ void Terrain::DrawShore() const
     }
 }
 
-void Terrain::DrawTrees(int index) const
+void Terrain::DrawTrees(int index, const Sprites& sprites) const
 {
     assert(index >= 0 && index < cfg::kStripCount);
     const Strip& s  = strips_[static_cast<size_t>(index)];
@@ -257,13 +310,15 @@ void Terrain::DrawTrees(int index) const
             if (hi - lo < r) { continue; }   // bank too narrow here
 
             const float tx = lo + Hash01(s.seed, salt + 3) * (hi - lo);
-            // Slight per-tree colour variation so a bank is not a field of identical dots.
-            const float  shade = 0.85f + 0.3f * Hash01(s.seed, salt + 5);
-            const Color  dark  { static_cast<unsigned char>(kTreeDark.r * shade),  static_cast<unsigned char>(kTreeDark.g * shade),  kTreeDark.b, 255 };
-            const Color  light { static_cast<unsigned char>(kTreeLight.r * shade), static_cast<unsigned char>(kTreeLight.g * shade), kTreeLight.b, 255 };
-            DrawCircleV(Vector2 {tx + 3.0f, ty + 4.0f}, r, Fade(BLACK, 0.25f));    // shadow
-            DrawCircleV(Vector2 {tx, ty}, r, dark);
-            DrawCircleV(Vector2 {tx - r * 0.25f, ty - r * 0.25f}, r * 0.55f, light);
+            // Sprite variant and a slight tint per tree so a bank is not a field of clones.
+            const int   variant = (Hash01(s.seed, salt + 4) < 0.5f) ? 0 : 1;
+            const float shade   = 0.85f + 0.3f * Hash01(s.seed, salt + 5);
+            const Color tint    { static_cast<unsigned char>(255.0f * ((shade > 1.0f) ? 1.0f : shade)),
+                                  static_cast<unsigned char>(255.0f * ((shade > 1.0f) ? 1.0f : shade)),
+                                  static_cast<unsigned char>(255.0f * ((shade > 1.0f) ? 1.0f : shade) * 0.95f), 255 };
+            DrawTreeReflection(tx, ty, r, side);
+            DrawEllipse(static_cast<int>(tx) + 4, static_cast<int>(ty) + 5, r, r * 0.8f, Fade(BLACK, 0.28f));   // shadow
+            Sprites::DrawInto(sprites.Tree(variant), tx - r, ty - r, r * 2.0f, r * 2.0f, tint);
         }
     }
 }
@@ -279,6 +334,16 @@ void Terrain::DrawObstacles(const Sprites& sprites) const
             DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), o.rect.width * 0.72f, Fade(RAYWHITE, 0.35f));
             DrawEllipse(static_cast<int>(cx) + 3, static_cast<int>(cy) + 4, o.rect.width * 0.5f, o.rect.height * 0.42f, Fade(BLACK, 0.3f));
             Sprites::DrawInto(sprites.Rock(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
+        } else if (o.kind == Kind::Boat) {
+            // Wake: two foam lines trailing from the stern, then shadow, then the boat
+            // (sprite faces +x; flip horizontally when heading left).
+            const float stern = (o.dir > 0.0f) ? o.rect.x : o.rect.x + o.rect.width;
+            const float back  = -o.dir * 26.0f;
+            DrawLineEx(Vector2 {stern, cy - 4.0f}, Vector2 {stern + back, cy - 10.0f}, 2.0f, Fade(RAYWHITE, 0.5f));
+            DrawLineEx(Vector2 {stern, cy + 4.0f}, Vector2 {stern + back, cy + 10.0f}, 2.0f, Fade(RAYWHITE, 0.5f));
+            DrawEllipse(static_cast<int>(cx) + 3, static_cast<int>(cy) + 5, o.rect.width * 0.5f, o.rect.height * 0.5f, Fade(BLACK, 0.3f));
+            const Rectangle src {0.0f, 0.0f, static_cast<float>(sprites.Boat().width) * o.dir, static_cast<float>(sprites.Boat().height)};
+            DrawTexturePro(sprites.Boat(), src, o.rect, Vector2 {0.0f, 0.0f}, 0.0f, WHITE);
         } else {
             Sprites::DrawInto(sprites.Fuel(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
             DrawFuelLabel(o.rect);

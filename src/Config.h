@@ -42,6 +42,11 @@ constexpr int   kRockChance       = 20;                              // percent 
 constexpr int   kFuelChance       = 12;                              // percent chance per new strip (rolled if no rock)
 constexpr float kObstacleW        = 28.0f;
 constexpr float kObstacleH        = 28.0f;
+constexpr int   kBoatChance       = 7;                               // percent per new strip (rolled after rock/fuel)
+constexpr float kBoatW            = 44.0f;
+constexpr float kBoatH            = 20.0f;
+constexpr float kBoatSpeed        = 70.0f;                           // px per second across the river
+constexpr int   kPointsPerBoat    = 200;
 constexpr float kObstacleInset    = 30.0f;                           // keep this far from the banks (covers inter-strip drift)
 constexpr int   kFuelLabelSize    = 12;                              // "FUEL" caption above each depot
 
@@ -103,6 +108,18 @@ constexpr int   kRollPuffs     = 8;
 constexpr float kRollPuffGap   = 0.035f;
 constexpr float kRollPuffRise  = 6.0f;                               // px each puff lags behind the tail per step
 
+// Wake foam behind the plane.
+constexpr int   kMaxFoam        = 64;
+constexpr float kFoamSeconds    = 0.9f;
+constexpr float kFoamSpawnGap   = 0.04f;                             // seconds between puff pairs
+constexpr float kFoamSpread     = 28.0f;                             // sideways drift, px per second
+constexpr float kFoamR          = 4.0f;
+
+// Shore: shallow-water tint width and tree reflections.
+constexpr float kShallowW       = 14.0f;
+constexpr float kReflectReach   = 34.0f;                             // trees this close to the bank reflect
+constexpr int   kTreeVariants   = 2;
+
 // Explosion bursts: fixed pool, fixed particle count per burst.
 constexpr int   kMaxBursts       = 8;
 constexpr int   kBurstParticles  = 12;
@@ -124,6 +141,10 @@ constexpr int         kHighScoreCount = 10;
 constexpr int         kNameMax        = 12;                          // characters, excluding the terminator
 constexpr const char* kHighScoreFile  = "highscores.txt";
 constexpr int         kNameInputRepeatChars = 8;                     // chars accepted per frame from the queue
+
+// Refuelling animation: droplets along a hose from the pump to the plane.
+constexpr int   kFuelDrops      = 6;
+constexpr float kFuelDropHz     = 1.6f;                              // trips per second along the hose
 
 // HUD.
 constexpr int   kFuelBarW     = 200;

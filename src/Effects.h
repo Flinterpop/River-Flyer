@@ -14,8 +14,11 @@ public:
 
     void Reset();
     void Spawn(Vector2 centre, Style style);   // silently dropped if the pool is full
+    void SpawnFoam(Vector2 pos, float vx);     // wake puff with sideways velocity
     void Update(float dt);
-    void Draw() const;
+    void Drift(float dy);                      // carry foam downstream with the river
+    void Draw() const;                         // bursts (on top of everything)
+    void DrawFoam() const;                     // wake (under the plane)
 
 private:
     struct Burst {
@@ -25,8 +28,16 @@ private:
         bool    active;
     };
 
+    struct Foam {
+        Vector2 pos;
+        float   vx;
+        float   age;
+        bool    active;
+    };
+
     static Color Tint(Style style);
     static void  DrawBurst(const Burst& b);
 
     std::array<Burst, cfg::kMaxBursts> pool_ {};
+    std::array<Foam, cfg::kMaxFoam>    foam_ {};
 };

@@ -29,8 +29,11 @@ void Game::Restart()
     effects_.Reset();
     lives_        = cfg::kLives;
     kills_        = 0;
+    boatKills_    = 0;
+    refuelPump_   = -1;
     fuel_         = cfg::kFuelMax;
     fireCooldown_ = 0.0f;
+    foamTimer_    = 0.0f;
     grace_        = 0.0f;
     finalScore_   = 0;
     newRow_       = -1;
@@ -59,7 +62,9 @@ void Game::UpdatePlaying(float dt)
     terrain_.Update(riverDt);
     if (player_.Braking()) { audio_.Sustain(Audio::Sfx::Brake); }
     bullets_.Update(dt);
+    effects_.Drift(terrain_.LastStep());
     effects_.Update(dt);
+    UpdateWake(dt);
     UpdateFiring(dt);
     ResolveBulletHits();
 
@@ -81,6 +86,7 @@ void Game::UpdateCrashing(float dt)
     // The river keeps flowing and shots keep travelling; only the plane is scripted.
     terrain_.Update(dt);
     bullets_.Update(dt);
+    effects_.Drift(terrain_.LastStep());
     effects_.Update(dt);
     ResolveBulletHits();
     player_.UpdateCrash(dt);
@@ -162,6 +168,20 @@ void Game::CommitName()
     assert(newRow_ >= 0 && newRow_ < scores_.Count());
 }
 
+void Game::UpdateWake(float dt)
+{
+    assert(dt >= 0.0f && state_ == State::Playing);
+    foamTimer_ -= dt;
+    if (foamTimer_ > 0.0f) { return; }
+    foamTimer_ = cfg::kFoamSpawnGap;
+    // Two puffs off the tail, one each side, spreading outward as they age.
+    const Vector2 c     = player_.Centre();
+    const float   tailY = c.y + cfg::kPlayerH * 0.45f;
+    effects_.SpawnFoam(Vector2 {c.x - 5.0f, tailY}, -cfg::kFoamSpread);
+    effects_.SpawnFoam(Vector2 {c.x + 5.0f, tailY},  cfg::kFoamSpread);
+    assert(foamTimer_ > 0.0f);
+}
+
 void Game::UpdateFiring(float dt)
 {
     assert(dt >= 0.0f);
@@ -181,9 +201,13 @@ bool Game::UpdateFuel(float dt)
     fuel_ -= cfg::kFuelBurnPerSec * dt;
 
     // Flying over a depot refuels without destroying it.
+    refuelPump_ = -1;
     const int hit = terrain_.FindObstacle(player_.Bounds());
     if (hit >= 0 && terrain_.ObstacleAt(hit).kind == Terrain::Kind::Fuel) {
-        if (fuel_ < cfg::kFuelMax) { audio_.Sustain(Audio::Sfx::Slurp); }   // only while actually taking fuel on
+        if (fuel_ < cfg::kFuelMax) {
+            audio_.Sustain(Audio::Sfx::Slurp);   // only while actually taking fuel on
+            refuelPump_ = hit;
+        }
         fuel_ += cfg::kFuelRefillPerSec * dt;
     }
     if (fuel_ > cfg::kFuelMax) { fuel_ = cfg::kFuelMax; }
@@ -206,9 +230,9 @@ void Game::ResolveBulletHits()
                                                                      : Effects::Style::Fuel;
         effects_.Spawn(RectCentre(o.rect), style);
         audio_.Play(Audio::Sfx::Pop);
+        if (o.kind == Terrain::Kind::Boat) { ++boatKills_; } else { ++kills_; }
         terrain_.RemoveObstacle(hit);
         bullets_.Kill(b);
-        ++kills_;
     }
     assert(kills_ >= 0);
 }
@@ -218,7 +242,7 @@ void Game::CheckPlayerCrash()
     assert(grace_ <= 0.0f && state_ == State::Playing);
     const Rectangle box = player_.Bounds();
     const int       hit = terrain_.FindObstacle(box);
-    const bool rock = (hit >= 0) && (terrain_.ObstacleAt(hit).kind == Terrain::Kind::Rock);
+    const bool rock = (hit >= 0) && (terrain_.ObstacleAt(hit).kind != Terrain::Kind::Fuel);   // rock or boat
 
     if (rock) {
         effects_.Spawn(RectCentre(terrain_.ObstacleAt(hit).rect), Effects::Style::Rock);
@@ -266,7 +290,7 @@ bool Game::PlayerVisible() const
 
 int Game::Score() const
 {
-    const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill;
+    const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill + boatKills_ * cfg::kPointsPerBoat;
     assert(score >= 0);
     return score;
 }
@@ -274,6 +298,8 @@ int Game::Score() const
 void Game::Draw() const
 {
     terrain_.Draw(sprites_);
+    effects_.DrawFoam();
+    if (state_ == State::Playing && refuelPump_ >= 0) { DrawRefuelling(); }
     bullets_.Draw(sprites_.Bullet());
     player_.Draw(sprites_.Player(), PlayerVisible());
     effects_.Draw();
@@ -335,6 +361,30 @@ void Game::DrawLives() const
     for (int i = 0; i < lives_; ++i) {
         Sprites::DrawInto(sprites_.Player(), static_cast<float>(cfg::kScreenW - spacing * (i + 1)), 10.0f, cfg::kPlayerW, cfg::kPlayerH, WHITE);
     }
+}
+
+void Game::DrawRefuelling() const
+{
+    assert(state_ == State::Playing && refuelPump_ >= 0);
+    const Terrain::Obstacle& pump = terrain_.ObstacleAt(refuelPump_);
+    const Vector2 from = RectCentre(pump.rect);
+    const Vector2 to   = player_.Centre();
+
+    // Hose from the pump to the plane, then droplets travelling along it.
+    DrawLineEx(from, to, 3.0f, Fade(BLACK, 0.5f));
+    DrawLineEx(from, to, 1.5f, DARKGRAY);
+    const float phase = static_cast<float>(std::fmod(GetTime() * cfg::kFuelDropHz, 1.0));
+    for (int i = 0; i < cfg::kFuelDrops; ++i) {
+        float u = phase + static_cast<float>(i) / static_cast<float>(cfg::kFuelDrops);
+        if (u >= 1.0f) { u -= 1.0f; }
+        assert(u >= 0.0f && u < 1.0f);
+        const Vector2 p {from.x + (to.x - from.x) * u, from.y + (to.y - from.y) * u};
+        DrawCircleV(p, 3.5f, ORANGE);
+        DrawCircleV(Vector2 {p.x - 1.0f, p.y - 1.0f}, 1.2f, RAYWHITE);
+    }
+    // Gauge pulse so the bar itself reads as filling.
+    const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(GetTime()) * 12.0f);
+    DrawRectangle(60, 42, static_cast<int>(static_cast<float>(cfg::kFuelBarW) * (fuel_ / cfg::kFuelMax)), cfg::kFuelBarH, Fade(RAYWHITE, 0.35f * pulse));
 }
 
 void Game::DrawScoreTable(int x, int y) const
