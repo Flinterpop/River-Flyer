@@ -3,14 +3,15 @@
 #include "raylib.h"
 
 #include "Config.h"
+#include "Input.h"
 
 // The player's craft. Moves freely in both axes, clamped to the window.
 // Two modes: flying (input-driven) and crashing (a scripted spiral that
 // ignores input and collisions until it finishes).
 class Player {
 public:
-    void Reset();
-    void Update(float dt);                       // flying only
+    void Reset(float xOffset = 0.0f);            // start position, shifted sideways for a second pilot
+    void Update(float dt, const InputMap& map);  // flying only
     void Draw(const Texture2D& tex, bool visible) const;
 
     // Axis-aligned hit box in world/screen space (flying only).

@@ -1,75 +1,103 @@
 #pragma once
 
+#include <array>
+
 #include "Audio.h"
 #include "Bullets.h"
 #include "Effects.h"
 #include "HighScores.h"
-#include "Player.h"
+#include "Pilot.h"
+#include "Profiles.h"
 #include "Shells.h"
 #include "Sprites.h"
 #include "Terrain.h"
 
-// Top-level game state machine. Owns the player, bullets, terrain, effects
-// and sprites. Must be constructed after InitWindow() and destroyed before
-// CloseWindow().
+// Top-level game state machine. Owns the pilots, bullets, terrain, effects,
+// sprites and audio. Must be constructed after InitWindow() and destroyed
+// before CloseWindow().
 class Game {
 public:
-    enum class State { Playing, Crashing, EnterName, GameOver };
+    enum class State { Title, EnterName, Playing, Paused, GameOver };
 
     Game();
     void Update(float dt);
     void Draw() const;
+    bool WantsQuit() const { return quit_; }
 
 private:
-    void Restart();
-    void UpdatePlaying(float dt);
-    void UpdateCrashing(float dt);
-    void UpdateEnterName(float dt);
-    void UpdateGameOver(float dt);
-    void FinishGame();               // Crashing -> EnterName or GameOver
-    void CommitName();
-    void UpdateFiring(float dt);
-    void UpdateWake(float dt);
-    bool UpdateFuel(float dt);            // true when the tank has just run dry
-    void ResolveBulletHits();
-    void CheckPlayerCrash();
-    void BeginCrash(Player::CrashStyle style);
-    void LoseLife();
-    bool PlayerVisible() const;
-    int  Score() const;
+    // Title-screen rows.
+    enum class Row { Players, PilotOne, PilotTwo, Difficulty, Count };
 
+    // ---- flow ----
+    void StartGame();
+    void UpdateTitle(float dt);
+    void UpdateEnterName(float dt);
+    void UpdatePlaying(float dt);
+    void UpdatePaused();
+    void UpdateGameOver(float dt);
+    void FinishGame();
+    void BeginNameEntry(int pilotIndex);
+    void CommitName();
+
+    // ---- per-pilot play ----
+    void UpdatePilot(Pilot& p, float dt);
+    void UpdateFiring(Pilot& p, float dt);
+    void UpdateWake(Pilot& p, float dt);
+    bool UpdateFuel(Pilot& p, float dt);          // true when the tank has just run dry
+    void CheckPilotCrash(Pilot& p);
+    void BeginCrash(Pilot& p, Player::CrashStyle style);
+    void FinishCrash(Pilot& p);
+    void ResolveBulletHits();
+    void UpdateGuns(float dt);
+    bool PilotVisible(const Pilot& p) const;
+    int  Score() const;
+    int  PilotCount() const { return twoPlayer_ ? 2 : 1; }
+    const cfg::Difficulty& Diff() const { return cfg::kDifficulties[difficulty_]; }
+
+    // ---- drawing ----
+    void DrawWorld() const;
+    void DrawDayNight() const;
     void DrawHud() const;
     static void DrawHudText(const char* text, int x, int y, int size);
-    void DrawFuelBar() const;
-    void DrawLives() const;
+    void DrawFuelBar(const Pilot& p, int x, int y) const;
+    void DrawLives(const Pilot& p, int x, int y, bool rightToLeft) const;
+    void DrawTitle() const;
+    void DrawTitleRow(Row row, int y, const char* label, const char* value) const;
+    void DrawPaused() const;
     void DrawGameOver() const;
     void DrawEnterName() const;
     void DrawScoreTable(int x, int y) const;
-    void DrawRefuelling() const;
+    void DrawRefuelling(const Pilot& p) const;
     void DrawPeekTable() const;
+    Vector2 ShakeOffset() const;
 
-    Audio   audio_;
-    Sprites sprites_;
-    State   state_ {State::Playing};
-    Player  player_;
-    Bullets bullets_;
-    Terrain terrain_;
+    Audio      audio_;
+    Sprites    sprites_;
+    State      state_ {State::Title};
+    Bullets    bullets_;
+    Terrain    terrain_;
     Effects    effects_;
     Shells     shells_;
     HighScores scores_;
+    Profiles   profiles_;
 
-    int   lives_        {0};
-    int   kills_        {0};
-    int   boatKills_    {0};
-    int   gunKills_     {0};
-    int   refuelPump_   {-1};     // obstacle index being drawn from, or -1
-    float fuel_         {0.0f};
-    float fireCooldown_ {0.0f};   // seconds until the next shot is allowed
-    float foamTimer_    {0.0f};   // seconds until the next wake puff pair
-    float grace_        {0.0f};   // seconds of invulnerability left after a respawn
-    int   finalScore_   {0};      // frozen at the moment the last plane is lost
-    int   newRow_       {-1};     // row of the entry just added, or -1
+    std::array<Pilot, cfg::kMaxPilots> pilots_ {};
+    bool twoPlayer_  {false};
+    int  difficulty_ {cfg::kDefaultDifficulty};
+    std::array<int, cfg::kMaxPilots> profileIdx_ {0, 1};   // title-screen selection per pilot
+    Row  row_        {Row::Players};
+    float demoX_     {-100.0f};    // title-screen fly-by plane
+    bool  quit_      {false};
 
-    std::array<char, cfg::kNameMax + 1> name_ {};   // name being typed (NUL-terminated)
-    int   nameLen_      {0};
+    int   kills_      {0};
+    int   boatKills_  {0};
+    int   gunKills_   {0};
+    int   finalScore_ {0};         // frozen when the last plane is lost
+    int   newRow_     {-1};        // row of the entry just added, or -1
+    float shake_      {0.0f};      // seconds of screen shake left
+
+    // Name being typed (title-screen rename); which pilot it is for.
+    std::array<char, cfg::kNameMax + 1> name_ {};
+    int nameLen_    {0};
+    int nameTarget_ {0};
 };

@@ -44,13 +44,22 @@ public:
         bool      active;
     };
 
-    void Reset();
+    // Per-game tuning from the difficulty preset.
+    struct Tuning {
+        float obstacleScale;
+        bool  guns;
+        float shellSpeed;
+        float scrollSpeed;
+        float rampDistance;
+    };
+
+    void Reset(const Tuning& tuning);
     void Update(float dt);
     void Draw(const Sprites& sprites) const;
 
-    // Guns track and fire at 'target' (screen space) when in range; returns
+    // Guns track and fire at the nearest of 'targets' when in range; returns
     // how many shots were fired this frame so the caller can play a sound.
-    int UpdateGuns(float dt, Vector2 target, bool mayFire, Shells& shells);
+    int UpdateGuns(float dt, const std::array<Vector2, cfg::kMaxPilots>& targets, int targetCount, bool mayFire, Shells& shells);
 
     // True if 'r' touches a river bank (outer bank or island).
     bool HitsBank(const Rectangle& r) const;
@@ -107,4 +116,5 @@ private:
     int   islandGap_    {0};         // single strips still required before the next island
     float islandTarget_ {0.0f};      // full width of the island being built
     int   gunSpacing_   {0};         // strips to wait before another gun may be placed
+    Tuning tuning_      {1.0f, true, cfg::kShellSpeed, cfg::kScrollSpeed, cfg::kRampDistance};
 };

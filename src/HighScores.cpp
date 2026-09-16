@@ -119,6 +119,24 @@ const HighScores::Entry& HighScores::At(int i) const
     return entries_[static_cast<size_t>(i)];
 }
 
+int HighScores::BestFor(const char* name) const
+{
+    assert(name != nullptr);
+    for (int i = 0; i < count_; ++i) {           // sorted high to low: first match is the best
+        const char* e = entries_[static_cast<size_t>(i)].name.data();
+        bool same = true;
+        for (int k = 0; k <= cfg::kNameMax && same; ++k) {
+            char a = e[k], b = name[k];
+            if (a >= 'a' && a <= 'z') { a = static_cast<char>(a - 'a' + 'A'); }
+            if (b >= 'a' && b <= 'z') { b = static_cast<char>(b - 'a' + 'A'); }
+            if (a != b) { same = false; }
+            if (a == '\0') { break; }
+        }
+        if (same) { return entries_[static_cast<size_t>(i)].score; }
+    }
+    return 0;
+}
+
 bool HighScores::Qualifies(int score) const
 {
     assert(score >= 0);

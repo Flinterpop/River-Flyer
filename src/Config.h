@@ -170,6 +170,39 @@ constexpr int         kNameInputRepeatChars = 8;                     // chars ac
 constexpr int   kFuelDrops      = 6;
 constexpr float kFuelDropHz     = 1.6f;                              // trips per second along the hose
 
+// Pilot profiles shown on the title screen.
+constexpr int         kMaxProfiles  = 8;
+constexpr const char* kProfilesFile = "profiles.txt";
+constexpr int         kMaxPilots    = 2;
+
+// Difficulty presets chosen on the title screen.
+struct Difficulty {
+    const char* name;
+    int         lives;
+    float       obstacleScale;   // multiplies rock / boat spawn chances
+    bool        guns;            // island guns present
+    float       shellSpeed;      // px per second
+    float       fuelBurn;        // fuel per second
+    float       scrollSpeed;     // base px per second
+    float       rampDistance;    // px of travel per +1.0 speed multiplier
+};
+constexpr int        kDifficultyCount = 3;
+constexpr Difficulty kDifficulties[kDifficultyCount] = {
+    { "EASY",   5, 0.6f, false,  90.0f, 3.0f,  85.0f, 12000.0f },
+    { "NORMAL", 3, 1.0f, true,  130.0f, 4.0f, 100.0f,  8000.0f },
+    { "HARD",   3, 1.4f, true,  170.0f, 5.0f, 120.0f,  5000.0f },
+};
+constexpr int kDefaultDifficulty = 1;
+
+// Screen shake on a crash, and the day/night cycle.
+constexpr float kShakeSeconds   = 0.45f;
+constexpr float kShakeAmplitude = 7.0f;                              // px
+constexpr float kDayLength      = 14000.0f;                          // px of river per full day
+constexpr float kNightAlpha     = 0.38f;
+
+// Title screen demo plane.
+constexpr float kDemoSpeed      = 160.0f;                            // px per second across the title
+
 // HUD.
 constexpr int   kFuelBarW     = 200;
 constexpr int   kFuelBarH     = 14;

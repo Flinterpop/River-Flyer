@@ -46,8 +46,10 @@ const Color kShallow   {30, 90, 60, 255};
 
 // ---- generation -----------------------------------------------------------
 
-void Terrain::Reset()
+void Terrain::Reset(const Tuning& tuning)
 {
+    assert(tuning.obstacleScale > 0.0f && tuning.scrollSpeed > 0.0f && tuning.rampDistance > 0.0f);
+    tuning_       = tuning;
     scrollOffset_ = 0.0f;
     distance_     = 0.0f;
     lastStep_     = 0.0f;
@@ -81,10 +83,10 @@ void Terrain::Reset()
 
 float Terrain::ScrollSpeed() const
 {
-    assert(cfg::kRampDistance > 0.0f);
-    const float mult = Clamp(1.0f + distance_ / cfg::kRampDistance, 1.0f, cfg::kRampMaxMult);
+    assert(tuning_.rampDistance > 0.0f);
+    const float mult = Clamp(1.0f + distance_ / tuning_.rampDistance, 1.0f, cfg::kRampMaxMult);
     assert(mult >= 1.0f && mult <= cfg::kRampMaxMult);
-    return cfg::kScrollSpeed * mult;
+    return tuning_.scrollSpeed * mult;
 }
 
 void Terrain::AdvancePhase(Strip& next)
@@ -175,7 +177,7 @@ void Terrain::TryPlaceGun(const Strip& strip)
     // Guns live on islands only, once the island is wide enough to hold one,
     // and never closer together than kGunSpacingStrips.
     if (gunSpacing_ > 0) { --gunSpacing_; }
-    if (strip.islandWidth < cfg::kGunMinIsland || gunSpacing_ > 0) { return; }
+    if (!tuning_.guns || strip.islandWidth < cfg::kGunMinIsland || gunSpacing_ > 0) { return; }
     if (GetRandomValue(1, 100) > cfg::kGunChance) { return; }
     gunSpacing_ = cfg::kGunSpacingStrips;
     const float reach = strip.islandWidth * 0.5f - cfg::kGunSize * 0.5f - 6.0f;
@@ -195,18 +197,28 @@ void Terrain::TryPlaceGun(const Strip& strip)
     }
 }
 
-int Terrain::UpdateGuns(float dt, Vector2 target, bool mayFire, Shells& shells)
+int Terrain::UpdateGuns(float dt, const std::array<Vector2, cfg::kMaxPilots>& targets, int targetCount, bool mayFire, Shells& shells)
 {
-    assert(dt >= 0.0f);
+    assert(dt >= 0.0f && targetCount >= 0 && targetCount <= cfg::kMaxPilots);
     int fired = 0;
+    if (targetCount == 0) { return 0; }
     for (Obstacle& o : obstacles_) {
         if (!o.active || o.kind != Kind::Gun) { continue; }
         if (o.flash > 0.0f) { o.flash -= dt; }
 
-        const Vector2 c  {o.rect.x + o.rect.width * 0.5f, o.rect.y + o.rect.height * 0.5f};
-        const float   dx = target.x - c.x;
-        const float   dy = target.y - c.y;
-        const float   dist = std::sqrt(dx * dx + dy * dy);
+        const Vector2 c {o.rect.x + o.rect.width * 0.5f, o.rect.y + o.rect.height * 0.5f};
+        // Nearest target wins.
+        Vector2 target = targets[0];
+        float   best   = 1.0e9f;
+        for (int i = 0; i < targetCount; ++i) {
+            const float ex = targets[static_cast<size_t>(i)].x - c.x;
+            const float ey = targets[static_cast<size_t>(i)].y - c.y;
+            const float d2 = ex * ex + ey * ey;
+            if (d2 < best) { best = d2; target = targets[static_cast<size_t>(i)]; }
+        }
+        const float dx   = target.x - c.x;
+        const float dy   = target.y - c.y;
+        const float dist = std::sqrt(dx * dx + dy * dy);
         const bool onScreen = c.y > 30.0f && c.y < static_cast<float>(cfg::kScreenH) - 40.0f;
         if (!onScreen || dist > cfg::kGunRange || dist < 1.0f) { continue; }
 
@@ -215,7 +227,7 @@ int Terrain::UpdateGuns(float dt, Vector2 target, bool mayFire, Shells& shells)
         o.timer -= dt;
         if (o.timer > 0.0f || !mayFire) { continue; }
 
-        const Vector2 vel {dx / dist * cfg::kShellSpeed, dy / dist * cfg::kShellSpeed};
+        const Vector2 vel {dx / dist * tuning_.shellSpeed, dy / dist * tuning_.shellSpeed};
         const Vector2 muzzle {c.x + dx / dist * o.rect.width * 0.5f, c.y + dy / dist * o.rect.height * 0.5f};
         shells.Fire(muzzle, vel);
         o.timer = cfg::kGunReload;
@@ -228,13 +240,16 @@ int Terrain::UpdateGuns(float dt, Vector2 target, bool mayFire, Shells& shells)
 
 void Terrain::TrySpawnObstacle(const Strip& strip)
 {
-    assert(cfg::kRockChance >= 0 && cfg::kRockChance + cfg::kFuelChance + cfg::kBoatChance <= 100);
+    // Rocks and boats scale with difficulty; fuel does not.
+    const int rock = static_cast<int>(static_cast<float>(cfg::kRockChance) * tuning_.obstacleScale);
+    const int boat = static_cast<int>(static_cast<float>(cfg::kBoatChance) * tuning_.obstacleScale);
+    assert(rock >= 0 && rock + cfg::kFuelChance + boat <= 100);
     const int roll = GetRandomValue(1, 100);
-    if (roll <= cfg::kRockChance) {
+    if (roll <= rock) {
         PlaceObstacle(strip, Kind::Rock);
-    } else if (roll <= cfg::kRockChance + cfg::kFuelChance) {
+    } else if (roll <= rock + cfg::kFuelChance) {
         PlaceObstacle(strip, Kind::Fuel);
-    } else if (roll <= cfg::kRockChance + cfg::kFuelChance + cfg::kBoatChance) {
+    } else if (roll <= rock + cfg::kFuelChance + boat) {
         PlaceObstacle(strip, Kind::Boat);
     }
 }

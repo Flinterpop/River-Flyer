@@ -11,19 +11,6 @@ namespace {
 constexpr float kTwoPi = 6.28318530718f;
 constexpr float kPi    = 3.14159265359f;
 
-// Reads WASD / arrow keys and returns a direction in [-1, 1] per axis.
-Vector2 ReadInput()
-{
-    Vector2 dir {0.0f, 0.0f};
-    if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) { dir.x -= 1.0f; }
-    if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { dir.x += 1.0f; }
-    if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) { dir.y -= 1.0f; }
-    if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) { dir.y += 1.0f; }
-    assert(dir.x >= -1.0f && dir.x <= 1.0f);
-    assert(dir.y >= -1.0f && dir.y <= 1.0f);
-    return dir;
-}
-
 float Clamp(float v, float lo, float hi)
 {
     assert(lo <= hi);
@@ -34,9 +21,10 @@ float Clamp(float v, float lo, float hi)
 
 } // namespace
 
-void Player::Reset()
+void Player::Reset(float xOffset)
 {
-    pos_.x     = (static_cast<float>(cfg::kScreenW) - cfg::kPlayerW) * 0.5f;
+    assert(xOffset > -200.0f && xOffset < 200.0f);
+    pos_.x     = (static_cast<float>(cfg::kScreenW) - cfg::kPlayerW) * 0.5f + xOffset;
     pos_.y     = cfg::kPlayerStartY;
     thrusting_ = false;
     braking_   = false;
@@ -46,11 +34,11 @@ void Player::Reset()
     assert(!Crashing());
 }
 
-void Player::Update(float dt)
+void Player::Update(float dt, const InputMap& map)
 {
     assert(dt >= 0.0f);
     assert(!Crashing());
-    const Vector2 dir = ReadInput();
+    const Vector2 dir = input::ReadMove(map);
     thrusting_ = (dir.y < 0.0f);
     braking_   = (dir.y > 0.0f);
 

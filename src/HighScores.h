@@ -23,6 +23,7 @@ public:
     int          Count() const { return count_; }
     const Entry& At(int i) const;
     int          Best() const { return (count_ > 0) ? entries_[0].score : 0; }
+    int          BestFor(const char* name) const;   // best score under this name (case-insensitive), or 0
 
     // True if 'score' would enter the table (ties go in below existing entries).
     bool Qualifies(int score) const;
