@@ -4,8 +4,9 @@
 
 // GPU textures for every drawable thing. Generated procedurally at start-up so
 // the repo carries no binary assets; swap the Gen* bodies for LoadTexture()
-// calls when real art exists. RAII: constructed after InitWindow(), destroyed
-// before CloseWindow().
+// calls when real art exists. Sprites are generated at kSpriteScale times
+// their on-screen size and drawn down with trilinear filtering so edges are
+// smooth. RAII: constructed after InitWindow(), destroyed before CloseWindow().
 class Sprites {
 public:
     Sprites();
@@ -17,15 +18,27 @@ public:
     const Texture2D& Rock()   const { return rock_; }
     const Texture2D& Fuel()   const { return fuel_; }
     const Texture2D& Bullet() const { return bullet_; }
+    const Texture2D& Water()  const { return water_; }
+    const Texture2D& Grass()  const { return grass_; }
+
+    // Draws the whole texture scaled into the given on-screen box.
+    static void DrawInto(const Texture2D& tex, float x, float y, float w, float h, Color tint);
+
+    // Same, but rotated about the box centre (angle in degrees).
+    static void DrawIntoRotated(const Texture2D& tex, float cx, float cy, float w, float h, float deg, Color tint);
 
 private:
     static Texture2D GenPlayer();
     static Texture2D GenRock();
     static Texture2D GenFuel();
     static Texture2D GenBullet();
+    static Texture2D GenWater();
+    static Texture2D GenGrass();
 
     Texture2D player_ {};
     Texture2D rock_   {};
     Texture2D fuel_   {};
     Texture2D bullet_ {};
+    Texture2D water_  {};
+    Texture2D grass_  {};
 };

@@ -12,6 +12,16 @@ constexpr int   kScreenW      = 640;
 constexpr int   kScreenH      = 800;
 constexpr int   kTargetFps    = 60;
 
+// Rendering: sprites are generated at kSpriteScale x and filtered down;
+// water/grass are Perlin tiles of kTileSize px, mirror-tiled and scrolled.
+constexpr int   kSpriteScale  = 2;
+constexpr int   kTileSize     = 256;
+constexpr int   kSliceH       = 4;                                   // px per water slice when drawing the river
+constexpr int   kTreesPerSide = 2;                                   // tree slots per strip per bank
+constexpr float kTreeChance   = 0.45f;                               // fraction of slots that grow a tree
+constexpr float kTreeMinR     = 5.0f;
+constexpr float kTreeMaxR     = 12.0f;
+
 // Terrain: the river is stored as a stack of horizontal strips.
 constexpr int   kStripH       = 32;                                  // px per strip
 constexpr int   kStripCount   = kScreenH / kStripH + 2;              // +2 so the top/bottom edges are always covered
@@ -32,7 +42,7 @@ constexpr int   kRockChance       = 20;                              // percent 
 constexpr int   kFuelChance       = 12;                              // percent chance per new strip (rolled if no rock)
 constexpr float kObstacleW        = 28.0f;
 constexpr float kObstacleH        = 28.0f;
-constexpr float kObstacleInset    = 8.0f;                            // keep this far from the banks
+constexpr float kObstacleInset    = 30.0f;                           // keep this far from the banks (covers inter-strip drift)
 constexpr int   kFuelLabelSize    = 12;                              // "FUEL" caption above each depot
 
 // Player craft.

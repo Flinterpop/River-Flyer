@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 
 #include "raylib.h"
 
@@ -10,13 +11,18 @@
 // A river that flows down the screen. Stored as a fixed stack of horizontal
 // strips (index 0 = top of screen) plus a fixed pool of obstacles. Nothing is
 // allocated after construction.
+//
+// Each strip holds the river centre and width at its TOP edge; between strips
+// the banks are interpolated linearly, so both rendering and collision see a
+// smooth shoreline rather than 32 px steps.
 class Terrain {
 public:
     enum class Kind { Rock, Fuel };
 
     struct Strip {
-        float centreX;   // river centre line in screen space
-        float width;     // river width
+        float    centreX;   // river centre line at the top edge, screen space
+        float    width;     // river width at the top edge
+        uint32_t seed;      // deterministic tree placement for this strip
     };
 
     struct Obstacle {
@@ -46,16 +52,23 @@ public:
     float ScrollSpeed() const;
 
 private:
-    Strip     MakeNextStrip(const Strip& above) const;
-    void      ShiftStripsDown();
-    void      TrySpawnObstacle(const Strip& strip);
-    void      PlaceObstacle(const Strip& strip, Kind kind);
-    Rectangle StripRect(int index) const;
+    Strip MakeNextStrip(const Strip& above) const;
+    void  ShiftStripsDown();
+    void  TrySpawnObstacle(const Strip& strip);
+    void  PlaceObstacle(const Strip& strip, Kind kind);
+
+    float StripTopY(int index) const;                 // screen y of a strip's top edge
+    void  BankAt(float y, float& left, float& right) const;   // interpolated bank x at screen y
+
+    void DrawWater(const Sprites& sprites) const;
+    void DrawShore() const;
+    void DrawTrees(int index) const;
+    void DrawObstacles(const Sprites& sprites) const;
     static void DrawFuelLabel(const Rectangle& depot);
-    bool      HitsBankStrip(const Rectangle& r, int index) const;
 
     std::array<Strip, cfg::kStripCount>          strips_ {};
     std::array<Obstacle, cfg::kMaxObstacles>     obstacles_ {};
-    float scrollOffset_ {0.0f};   // 0 .. kStripH; sub-strip scroll position
-    float distance_     {0.0f};
+    float    scrollOffset_ {0.0f};   // 0 .. kStripH; sub-strip scroll position
+    float    distance_     {0.0f};
+    uint32_t nextSeed_     {0x9E3779B9u};
 };

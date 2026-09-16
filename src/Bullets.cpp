@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "Sprites.h"
+
 void Bullets::Reset()
 {
     for (Bullet& b : pool_) {
@@ -36,7 +38,7 @@ void Bullets::Draw(const Texture2D& tex) const
 {
     assert(tex.id != 0);
     for (const Bullet& b : pool_) {
-        if (b.active) { DrawTexture(tex, static_cast<int>(b.rect.x), static_cast<int>(b.rect.y), WHITE); }
+        if (b.active) { Sprites::DrawInto(tex, b.rect.x, b.rect.y, b.rect.width, b.rect.height, WHITE); }
     }
 }
 

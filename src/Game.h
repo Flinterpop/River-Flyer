@@ -37,6 +37,7 @@ private:
     int  Score() const;
 
     void DrawHud() const;
+    static void DrawHudText(const char* text, int x, int y, int size);
     void DrawFuelBar() const;
     void DrawLives() const;
     void DrawGameOver() const;

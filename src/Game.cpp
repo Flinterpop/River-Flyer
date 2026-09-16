@@ -282,13 +282,12 @@ void Game::Draw() const
 
 void Game::DrawHud() const
 {
-    DrawText(TextFormat("SCORE %06d", Score()), 10, 10, 24, DARKBLUE);
+    DrawHudText(TextFormat("SCORE %06d", Score()), 10, 10, 24);
     DrawFuelBar();
     DrawLives();
     {
         const char* best = TextFormat("BEST %06d", scores_.Best());
-        const int   w    = MeasureText(best, 16);
-        DrawText(best, (cfg::kScreenW - w) / 2, 14, 16, DARKBLUE);
+        DrawHudText(best, (cfg::kScreenW - MeasureText(best, 16)) / 2, 14, 16);
     }
     if (state_ == State::EnterName) { DrawEnterName(); }
     if (state_ == State::GameOver)  { DrawGameOver(); }
@@ -308,6 +307,13 @@ void Game::DrawPeekTable() const
     DrawScoreTable(px + 30, py + 20);
 }
 
+void Game::DrawHudText(const char* text, int x, int y, int size)
+{
+    assert(text != nullptr && size > 0);
+    DrawText(text, x + 2, y + 2, size, Fade(BLACK, 0.6f));   // shadow keeps it legible on grass
+    DrawText(text, x, y, size, RAYWHITE);
+}
+
 void Game::DrawFuelBar() const
 {
     assert(fuel_ >= 0.0f && fuel_ <= cfg::kFuelMax);
@@ -316,10 +322,10 @@ void Game::DrawFuelBar() const
     const int fill = static_cast<int>(static_cast<float>(cfg::kFuelBarW) * (fuel_ / cfg::kFuelMax));
     const Color c  = (fuel_ < cfg::kFuelMax * 0.25f) ? RED : GREEN;
 
-    DrawText("FUEL", x, y - 2, 16, DARKBLUE);
+    DrawHudText("FUEL", x, y - 2, 16);
     DrawRectangle(x + 50, y, cfg::kFuelBarW, cfg::kFuelBarH, Fade(BLACK, 0.3f));
     DrawRectangle(x + 50, y, fill, cfg::kFuelBarH, c);
-    DrawRectangleLines(x + 50, y, cfg::kFuelBarW, cfg::kFuelBarH, DARKBLUE);
+    DrawRectangleLines(x + 50, y, cfg::kFuelBarW, cfg::kFuelBarH, RAYWHITE);
 }
 
 void Game::DrawLives() const
@@ -327,7 +333,7 @@ void Game::DrawLives() const
     assert(lives_ >= 0 && lives_ <= cfg::kLives);
     const int spacing = 36;
     for (int i = 0; i < lives_; ++i) {
-        DrawTexture(sprites_.Player(), cfg::kScreenW - spacing * (i + 1), 10, WHITE);
+        Sprites::DrawInto(sprites_.Player(), static_cast<float>(cfg::kScreenW - spacing * (i + 1)), 10.0f, cfg::kPlayerW, cfg::kPlayerH, WHITE);
     }
 }
 

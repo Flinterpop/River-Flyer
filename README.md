@@ -63,10 +63,10 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Config.h` | Every tunable: sizes, speeds, spawn chances, animation and sound parameters, version |
 | `src/Game.*` | State machine (Playing, Crashing, GameOver), collisions, fuel, score, HUD |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
-| `src/Terrain.*` | River strips that scroll down with random drift; rock and fuel-pump pool |
+| `src/Terrain.*` | River strips that scroll down with random drift, banks interpolated between strips, sand shoreline, trees; rock and fuel-pump pool |
 | `src/Bullets.*` | Fixed bullet pool |
 | `src/Effects.*` | Fixed pool of particle bursts (rock, fuel, plane, splash) |
-| `src/Sprites.*` | Textures drawn procedurally at start-up; swap for `LoadTexture()` when real art exists |
+| `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
 | `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare |
 | `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |
 

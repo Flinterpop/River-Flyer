@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "Config.h"
+#include "Sprites.h"
 
 namespace {
 
@@ -147,9 +148,12 @@ void Player::Draw(const Texture2D& tex, bool visible) const
 void Player::DrawFlying(const Texture2D& tex) const
 {
     assert(!Crashing());
+    // Drop shadow on the water gives the plane some altitude.
+    DrawEllipse(static_cast<int>(pos_.x + cfg::kPlayerW * 0.5f) + 10, static_cast<int>(pos_.y + cfg::kPlayerH * 0.5f) + 16,
+                cfg::kPlayerW * 0.45f, cfg::kPlayerH * 0.3f, Fade(BLACK, 0.25f));
     if (thrusting_)    { DrawFlame(); }   // behind the sprite
     if (chute_ > 0.0f) { DrawChute(); }
-    DrawTexture(tex, static_cast<int>(pos_.x), static_cast<int>(pos_.y), WHITE);
+    Sprites::DrawInto(tex, pos_.x, pos_.y, cfg::kPlayerW, cfg::kPlayerH, WHITE);
 }
 
 void Player::DrawChute() const
@@ -208,12 +212,8 @@ void Player::DrawSpiral(const Texture2D& tex) const
     const float rot   = 360.0f * cfg::kCrashTurns * t * 1.5f;   // spins faster than it orbits
     assert(scale >= cfg::kCrashMinScale && scale <= 1.0f);
 
-    const Vector2   c   = Centre();
-    const float     w   = cfg::kPlayerW * scale;
-    const float     h   = cfg::kPlayerH * scale;
-    const Rectangle src {0.0f, 0.0f, static_cast<float>(tex.width), static_cast<float>(tex.height)};
-    const Rectangle dst {c.x, c.y, w, h};
-    DrawTexturePro(tex, src, dst, Vector2 {w * 0.5f, h * 0.5f}, rot, Fade(WHITE, 1.0f - 0.5f * t));
+    const Vector2 c = Centre();
+    Sprites::DrawIntoRotated(tex, c.x, c.y, cfg::kPlayerW * scale, cfg::kPlayerH * scale, rot, Fade(WHITE, 1.0f - 0.5f * t));
 }
 
 void Player::DrawRollSmoke() const
@@ -254,12 +254,8 @@ void Player::DrawRoll(const Texture2D& tex) const
     const float scale = 1.0f - 0.8f * sink;
     const float alpha = 1.0f - sink;
 
-    const Vector2   c   = Centre();
-    const float     w   = cfg::kPlayerW * squash * scale;
-    const float     h   = cfg::kPlayerH * scale;
-    const Rectangle src {0.0f, 0.0f, static_cast<float>(tex.width), static_cast<float>(tex.height)};
-    const Rectangle dst {c.x, c.y, w, h};
-    DrawTexturePro(tex, src, dst, Vector2 {w * 0.5f, h * 0.5f}, yaw, Fade(WHITE, alpha));
+    const Vector2 c = Centre();
+    Sprites::DrawIntoRotated(tex, c.x, c.y, cfg::kPlayerW * squash * scale, cfg::kPlayerH * scale, yaw, Fade(WHITE, alpha));
 }
 
 // ---- geometry -------------------------------------------------------------

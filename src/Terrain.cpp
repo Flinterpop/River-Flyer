@@ -1,6 +1,7 @@
 #include "Terrain.h"
 
 #include <cassert>
+#include <cmath>
 
 namespace {
 
@@ -19,7 +20,24 @@ float RandomDrift(float magnitude)
     return static_cast<float>(GetRandomValue(-steps, steps));
 }
 
+// Cheap integer hash -> [0, 1). Deterministic so trees stay put as strips scroll.
+float Hash01(uint32_t seed, uint32_t salt)
+{
+    uint32_t h = seed ^ (salt * 0x9E3779B9u);
+    h ^= h >> 16; h *= 0x85EBCA6Bu;
+    h ^= h >> 13; h *= 0xC2B2AE35u;
+    h ^= h >> 16;
+    return static_cast<float>(h >> 8) / static_cast<float>(1u << 24);
+}
+
+const Color kSand      {214, 196, 140, 255};
+const Color kSandWet   {160, 140, 90, 255};
+const Color kTreeDark  {22, 84, 30, 255};
+const Color kTreeLight {48, 132, 52, 255};
+
 } // namespace
+
+// ---- generation -----------------------------------------------------------
 
 void Terrain::Reset()
 {
@@ -34,7 +52,7 @@ void Terrain::Reset()
 
     // Seed from the bottom strip upwards so the player starts in a wide,
     // straight channel and the twists appear at the top.
-    Strip seed {static_cast<float>(cfg::kScreenW) * 0.5f, cfg::kRiverMaxW};
+    Strip seed {static_cast<float>(cfg::kScreenW) * 0.5f, cfg::kRiverMaxW, nextSeed_};
     for (int i = cfg::kStripCount - 1; i >= 0; --i) {
         strips_[static_cast<size_t>(i)] = seed;
         seed = MakeNextStrip(seed);
@@ -60,6 +78,7 @@ Terrain::Strip Terrain::MakeNextStrip(const Strip& above) const
     next.centreX = Clamp(above.centreX + RandomDrift(cfg::kRiverDriftX),
                          cfg::kBankMargin + half,
                          static_cast<float>(cfg::kScreenW) - cfg::kBankMargin - half);
+    next.seed    = above.seed * 1664525u + 1013904223u;
     assert(next.centreX - half >= 0.0f);
     assert(next.centreX + half <= static_cast<float>(cfg::kScreenW));
     return next;
@@ -126,32 +145,144 @@ void Terrain::Update(float dt)
     }
 }
 
-Rectangle Terrain::StripRect(int index) const
+// ---- geometry -------------------------------------------------------------
+
+float Terrain::StripTopY(int index) const
 {
     assert(index >= 0 && index < cfg::kStripCount);
     // Strip 0 sits partly above the window; offset moves everything downward.
-    const float y = static_cast<float>((index - 1) * cfg::kStripH) + scrollOffset_;
-    return Rectangle {0.0f, y, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kStripH)};
+    return static_cast<float>((index - 1) * cfg::kStripH) + scrollOffset_;
 }
+
+void Terrain::BankAt(float y, float& left, float& right) const
+{
+    // Strip whose top edge is at or above y, clamped so index+1 exists.
+    int idx = static_cast<int>(std::floor((y - scrollOffset_) / static_cast<float>(cfg::kStripH))) + 1;
+    if (idx < 0) { idx = 0; }
+    if (idx > cfg::kStripCount - 2) { idx = cfg::kStripCount - 2; }
+    const float t = Clamp((y - StripTopY(idx)) / static_cast<float>(cfg::kStripH), 0.0f, 1.0f);
+
+    const Strip& a = strips_[static_cast<size_t>(idx)];
+    const Strip& b = strips_[static_cast<size_t>(idx + 1)];
+    const float centre = a.centreX + (b.centreX - a.centreX) * t;
+    const float half   = (a.width + (b.width - a.width) * t) * 0.5f;
+    left  = centre - half;
+    right = centre + half;
+    assert(left >= 0.0f && right <= static_cast<float>(cfg::kScreenW) && left < right);
+}
+
+bool Terrain::HitsBank(const Rectangle& r) const
+{
+    assert(r.width > 0.0f && r.height > 0.0f);
+    // Banks are piecewise linear, so sampling every few px down the box is enough.
+    const float step = 6.0f;
+    for (float y = r.y; y <= r.y + r.height + step; y += step) {
+        const float sy = (y > r.y + r.height) ? (r.y + r.height) : y;
+        float left = 0.0f, right = 0.0f;
+        BankAt(sy, left, right);
+        if (r.x < left || r.x + r.width > right) { return true; }
+        if (sy >= r.y + r.height) { break; }
+    }
+    return false;
+}
+
+// ---- drawing --------------------------------------------------------------
 
 void Terrain::Draw(const Sprites& sprites) const
 {
-    for (int i = 0; i < cfg::kStripCount; ++i) {
-        const Strip&    s = strips_[static_cast<size_t>(i)];
-        const Rectangle r = StripRect(i);
-        const float     left  = s.centreX - s.width * 0.5f;
-        const float     right = s.centreX + s.width * 0.5f;
+    // Land everywhere first (textured, scrolling), then the river cut into it.
+    const float scroll = -distance_;
+    const Rectangle grassSrc {0.0f, scroll, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kScreenH)};
+    DrawTexturePro(sprites.Grass(), grassSrc,
+                   Rectangle {0.0f, 0.0f, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kScreenH)},
+                   Vector2 {0.0f, 0.0f}, 0.0f, WHITE);
+    DrawWater(sprites);
+    DrawShore();
+    for (int i = 0; i < cfg::kStripCount; ++i) { DrawTrees(i); }
+    DrawObstacles(sprites);
+}
 
-        DrawRectangleRec(Rectangle {0.0f, r.y, left, r.height}, LIME);
-        DrawRectangleRec(Rectangle {left, r.y, right - left, r.height}, SKYBLUE);
-        DrawRectangleRec(Rectangle {right, r.y, r.width - right, r.height}, LIME);
+void Terrain::DrawWater(const Sprites& sprites) const
+{
+    // Thin horizontal slices between the interpolated banks; the water tile
+    // scrolls with the river so it looks like it is flowing.
+    const float scroll = -distance_;
+    const float h      = static_cast<float>(cfg::kSliceH);
+    for (int y = -cfg::kSliceH; y < cfg::kScreenH; y += cfg::kSliceH) {
+        const float fy = static_cast<float>(y);
+        float left = 0.0f, right = 0.0f;
+        BankAt(fy + h * 0.5f, left, right);
+        const Rectangle src {left, fy + scroll, right - left, h};
+        DrawTexturePro(sprites.Water(), src, Rectangle {left, fy, right - left, h}, Vector2 {0.0f, 0.0f}, 0.0f, WHITE);
     }
+}
 
+void Terrain::DrawShore() const
+{
+    // Sand line along each bank, drawn segment by segment between strip tops,
+    // with a thin wet edge on the water side.
+    for (int i = 0; i < cfg::kStripCount - 1; ++i) {
+        const float y0 = StripTopY(i);
+        const float y1 = StripTopY(i + 1);
+        const Strip& a = strips_[static_cast<size_t>(i)];
+        const Strip& b = strips_[static_cast<size_t>(i + 1)];
+        const Vector2 l0 {a.centreX - a.width * 0.5f, y0};
+        const Vector2 l1 {b.centreX - b.width * 0.5f, y1};
+        const Vector2 r0 {a.centreX + a.width * 0.5f, y0};
+        const Vector2 r1 {b.centreX + b.width * 0.5f, y1};
+        DrawLineEx(Vector2 {l0.x - 2.0f, l0.y}, Vector2 {l1.x - 2.0f, l1.y}, 4.0f, kSand);
+        DrawLineEx(Vector2 {r0.x + 2.0f, r0.y}, Vector2 {r1.x + 2.0f, r1.y}, 4.0f, kSand);
+        DrawLineEx(l0, l1, 1.5f, kSandWet);
+        DrawLineEx(r0, r1, 1.5f, kSandWet);
+    }
+}
+
+void Terrain::DrawTrees(int index) const
+{
+    assert(index >= 0 && index < cfg::kStripCount);
+    const Strip& s  = strips_[static_cast<size_t>(index)];
+    const float  y0 = StripTopY(index);
+
+    for (int side = 0; side < 2; ++side) {
+        for (int k = 0; k < cfg::kTreesPerSide; ++k) {
+            const uint32_t salt = static_cast<uint32_t>(side * 16 + k * 4);
+            if (Hash01(s.seed, salt) > cfg::kTreeChance) { continue; }   // empty slot
+            const float ty = y0 + Hash01(s.seed, salt + 1) * static_cast<float>(cfg::kStripH);
+            const float r  = cfg::kTreeMinR + Hash01(s.seed, salt + 2) * (cfg::kTreeMaxR - cfg::kTreeMinR);
+
+            float left = 0.0f, right = 0.0f;
+            BankAt(ty, left, right);
+            const float lo = (side == 0) ? r + 4.0f : right + r + 8.0f;
+            const float hi = (side == 0) ? left - r - 8.0f : static_cast<float>(cfg::kScreenW) - r - 4.0f;
+            if (hi - lo < r) { continue; }   // bank too narrow here
+
+            const float tx = lo + Hash01(s.seed, salt + 3) * (hi - lo);
+            // Slight per-tree colour variation so a bank is not a field of identical dots.
+            const float  shade = 0.85f + 0.3f * Hash01(s.seed, salt + 5);
+            const Color  dark  { static_cast<unsigned char>(kTreeDark.r * shade),  static_cast<unsigned char>(kTreeDark.g * shade),  kTreeDark.b, 255 };
+            const Color  light { static_cast<unsigned char>(kTreeLight.r * shade), static_cast<unsigned char>(kTreeLight.g * shade), kTreeLight.b, 255 };
+            DrawCircleV(Vector2 {tx + 3.0f, ty + 4.0f}, r, Fade(BLACK, 0.25f));    // shadow
+            DrawCircleV(Vector2 {tx, ty}, r, dark);
+            DrawCircleV(Vector2 {tx - r * 0.25f, ty - r * 0.25f}, r * 0.55f, light);
+        }
+    }
+}
+
+void Terrain::DrawObstacles(const Sprites& sprites) const
+{
     for (const Obstacle& o : obstacles_) {
         if (!o.active) { continue; }
-        const Texture2D& tex = (o.kind == Kind::Rock) ? sprites.Rock() : sprites.Fuel();
-        DrawTexture(tex, static_cast<int>(o.rect.x), static_cast<int>(o.rect.y), WHITE);
-        if (o.kind == Kind::Fuel) { DrawFuelLabel(o.rect); }
+        const float cx = o.rect.x + o.rect.width * 0.5f;
+        const float cy = o.rect.y + o.rect.height * 0.5f;
+        if (o.kind == Kind::Rock) {
+            // Ripple ring and a shadow in the water, then the lit rock.
+            DrawCircleLines(static_cast<int>(cx), static_cast<int>(cy), o.rect.width * 0.72f, Fade(RAYWHITE, 0.35f));
+            DrawEllipse(static_cast<int>(cx) + 3, static_cast<int>(cy) + 4, o.rect.width * 0.5f, o.rect.height * 0.42f, Fade(BLACK, 0.3f));
+            Sprites::DrawInto(sprites.Rock(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
+        } else {
+            Sprites::DrawInto(sprites.Fuel(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
+            DrawFuelLabel(o.rect);
+        }
     }
 }
 
@@ -167,26 +298,7 @@ void Terrain::DrawFuelLabel(const Rectangle& depot)
     DrawText(text, x,     y,     cfg::kFuelLabelSize, RAYWHITE);
 }
 
-bool Terrain::HitsBankStrip(const Rectangle& r, int index) const
-{
-    assert(index >= 0 && index < cfg::kStripCount);
-    const Strip&    s  = strips_[static_cast<size_t>(index)];
-    const Rectangle sr = StripRect(index);
-    if (!CheckCollisionRecs(r, sr)) { return false; }
-
-    const float left  = s.centreX - s.width * 0.5f;
-    const float right = s.centreX + s.width * 0.5f;
-    return (r.x < left) || (r.x + r.width > right);
-}
-
-bool Terrain::HitsBank(const Rectangle& r) const
-{
-    assert(r.width > 0.0f && r.height > 0.0f);
-    for (int i = 0; i < cfg::kStripCount; ++i) {
-        if (HitsBankStrip(r, i)) { return true; }
-    }
-    return false;
-}
+// ---- obstacles ------------------------------------------------------------
 
 int Terrain::FindObstacle(const Rectangle& r) const
 {
