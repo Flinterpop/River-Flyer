@@ -2,7 +2,7 @@
 
 [![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
 
-[release-badge]: https://img.shields.io/badge/release-v0.3.0-blue
+[release-badge]: https://img.shields.io/badge/release-v0.4.0-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
@@ -100,10 +100,10 @@ Notes:
 Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together, build Release, then tag and publish:
 
 ```powershell
-git tag -a v0.3.0 -m "v0.3.0"
-git push origin main v0.3.0
-Compress-Archive build\Release\scroller.exe RiverFlyer-v0.3.0-win64.zip
-gh release create v0.3.0 RiverFlyer-v0.3.0-win64.zip --title "v0.3.0" --notes-file notes.md
+git tag -a v0.4.0 -m "v0.4.0"
+git push origin main v0.4.0
+Compress-Archive build\Release\scroller.exe RiverFlyer-v0.4.0-win64.zip
+gh release create v0.4.0 RiverFlyer-v0.4.0-win64.zip --title "v0.4.0" --notes-file notes.md
 ```
 
 ## License
