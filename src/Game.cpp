@@ -29,6 +29,32 @@ void SetName(std::array<char, cfg::kNameMax + 1>& dst, const char* src)
     dst[static_cast<size_t>(n)] = '\0';
 }
 
+// In the browser the page cannot close itself, so Q on the title does nothing there.
+#if defined(__EMSCRIPTEN__)
+constexpr bool kCanQuit = false;
+#else
+constexpr bool kCanQuit = true;
+#endif
+
+// On-screen keyboard for pilot names: four rows of ten keys, then a row of
+// three wide keys (SPACE, DEL, OK). The cursor column always stays in
+// [0, kKeyCols); on the wide row it maps onto whichever wide key covers it.
+constexpr int  kKeyCols = 10;
+constexpr int  kKeyRows = 5;
+constexpr int  kKeyCell = 40;                                        // px per key, including the gap
+constexpr char kKeyChars[kKeyRows - 1][kKeyCols + 1] = {"ABCDEFGHIJ", "KLMNOPQRST", "UVWXYZ0123", "456789-'!?"};
+enum class WideKey { Space, Del, Ok };
+constexpr int  kWideFirstCol[3] = {0, 4, 7};                         // where each wide key starts
+constexpr int  kWideCols[3]     = {4, 3, 3};                         // and how many columns it spans
+
+WideKey WideKeyAt(int col)
+{
+    assert(col >= 0 && col < kKeyCols);
+    if (col < kWideFirstCol[1]) { return WideKey::Space; }
+    if (col < kWideFirstCol[2]) { return WideKey::Del; }
+    return WideKey::Ok;
+}
+
 } // namespace
 
 // ============================================================================
@@ -118,7 +144,7 @@ void Game::UpdateTitle(float dt)
             case Row::Count:      break;
         }
     }
-    if (IsKeyPressed(KEY_Q)) { quit_ = true; return; }
+    if (kCanQuit && IsKeyPressed(KEY_Q)) { quit_ = true; return; }
     if (IsKeyPressed(KEY_SPACE)) { StartGame(); return; }
     if (input::MenuConfirm()) {
         if (row_ == Row::PilotOne)      { BeginNameEntry(0); }
@@ -135,6 +161,8 @@ void Game::BeginNameEntry(int pilotIndex)
     SetName(name_, profiles_.At(profileIdx_[static_cast<size_t>(pilotIndex)]));
     nameLen_ = 0;
     while (name_[static_cast<size_t>(nameLen_)] != '\0') { ++nameLen_; }
+    keyCol_ = 0;
+    keyRow_ = 0;
     state_ = State::EnterName;
     assert(nameLen_ >= 0 && nameLen_ <= cfg::kNameMax);
 }
@@ -149,11 +177,7 @@ void Game::UpdateEnterName(float dt)
     for (int i = 0; i < cfg::kNameInputRepeatChars; ++i) {
         const int c = GetCharPressed();
         if (c == 0) { break; }
-        if (c >= 32 && c <= 126 && nameLen_ < cfg::kNameMax) {
-            name_[static_cast<size_t>(nameLen_)] = static_cast<char>(c);
-            ++nameLen_;
-            name_[static_cast<size_t>(nameLen_)] = '\0';
-        }
+        if (c >= 32 && c <= 126) { TypeChar(static_cast<char>(c)); }
     }
     // Backspaces: drain the key queue so several in one frame all count,
     // plus key-repeat while it is held.
@@ -163,13 +187,67 @@ void Game::UpdateEnterName(float dt)
         if (k == 0) { break; }
         if (k == KEY_BACKSPACE) { ++erase; }
     }
-    for (; erase > 0 && nameLen_ > 0; --erase) {
-        --nameLen_;
-        name_[static_cast<size_t>(nameLen_)] = static_cast<char>(0);
+    for (; erase > 0; --erase) { EraseChar(); }
+
+    // On-screen keyboard: arrows / d-pad / stick move, A types, B erases, Y is space.
+    const input::Nav nav = input::NavPressed();
+    if (nav.dx != 0 || nav.dy != 0) { MoveKeyCursor(nav.dx, nav.dy); }
+    if (input::PadErasePressed()) { EraseChar(); }
+    if (input::PadSpacePressed()) { TypeChar(' '); }
+    if (input::PadTypePressed()) {
+        PressKeyCursor();
+        if (state_ != State::EnterName) { return; }   // OK key: name committed
     }
-    if (IsKeyPressed(KEY_ESCAPE)) { state_ = State::Title; return; }
-    if (IsKeyPressed(KEY_ENTER) && nameLen_ > 0) { CommitName(); }
+
+    if (IsKeyPressed(KEY_ESCAPE) || input::PadCancelPressed()) { state_ = State::Title; return; }
+    if ((IsKeyPressed(KEY_ENTER) || input::PadDonePressed()) && nameLen_ > 0) { CommitName(); }
     assert(nameLen_ >= 0 && nameLen_ <= cfg::kNameMax);
+}
+
+void Game::TypeChar(char c)
+{
+    assert(c >= 32 && c <= 126);
+    if (nameLen_ >= cfg::kNameMax) { return; }
+    name_[static_cast<size_t>(nameLen_)] = c;
+    ++nameLen_;
+    name_[static_cast<size_t>(nameLen_)] = '\0';
+    assert(nameLen_ > 0 && nameLen_ <= cfg::kNameMax);
+}
+
+void Game::EraseChar()
+{
+    if (nameLen_ <= 0) { return; }
+    --nameLen_;
+    name_[static_cast<size_t>(nameLen_)] = '\0';
+    assert(nameLen_ >= 0 && nameLen_ < cfg::kNameMax);
+}
+
+void Game::MoveKeyCursor(int dx, int dy)
+{
+    assert(dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1);
+    keyRow_ = (keyRow_ + dy + kKeyRows) % kKeyRows;
+    if (keyRow_ < kKeyRows - 1) {
+        keyCol_ = (keyCol_ + dx + kKeyCols) % kKeyCols;
+    } else if (dx != 0) {
+        // Wide row: step between the three wide keys, landing on each one's first column.
+        const int wide = (static_cast<int>(WideKeyAt(keyCol_)) + dx + 3) % 3;
+        keyCol_ = kWideFirstCol[wide];
+    }
+    assert(keyRow_ >= 0 && keyRow_ < kKeyRows && keyCol_ >= 0 && keyCol_ < kKeyCols);
+}
+
+void Game::PressKeyCursor()
+{
+    assert(state_ == State::EnterName);
+    if (keyRow_ < kKeyRows - 1) {
+        TypeChar(kKeyChars[keyRow_][keyCol_]);
+        return;
+    }
+    switch (WideKeyAt(keyCol_)) {
+        case WideKey::Space: TypeChar(' '); break;
+        case WideKey::Del:   EraseChar();   break;
+        case WideKey::Ok:    if (nameLen_ > 0) { CommitName(); } break;
+    }
 }
 
 void Game::CommitName()
@@ -788,7 +866,8 @@ void Game::DrawTitle() const
     const int best1 = scores_.BestFor(profiles_.At(profileIdx_[0]));
     DrawText(TextFormat("%s's best: %06d", profiles_.At(profileIdx_[0]), best1), px + 30, y, 18, LIGHTGRAY); y += 40;
 
-    DrawText(TextFormat("SPACE / A: fly     Enter on a pilot: rename     Q: quit     M: music %s", audio_.MusicOn() ? "on" : "off"), px + 30, y, 16, LIGHTGRAY); y += 26;
+    DrawText(TextFormat("SPACE / A: fly     Enter or A on a pilot: rename     %sM: music %s",
+                        kCanQuit ? "Q: quit     " : "", audio_.MusicOn() ? "on" : "off"), px + 30, y, 16, LIGHTGRAY); y += 26;
     DrawText("P1: WASD + Space, C chaff, V jam    P2: arrows + RCtrl, / chaff, . jam", px + 30, y, 16, LIGHTGRAY); y += 26;
     int pads = 0;
     for (int i = 0; i < 2; ++i) { if (IsGamepadAvailable(i)) { ++pads; } }
@@ -811,20 +890,51 @@ void Game::DrawPaused() const
 void Game::DrawEnterName() const
 {
     assert(state_ == State::EnterName);
-    const int panelW = 440, panelH = 200;
+    const int panelW = kKeyCols * kKeyCell + 60, panelH = 390;
     const int px = (cfg::kScreenW - panelW) / 2, py = (cfg::kScreenH - panelH) / 2;
     DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.85f));
     DrawRectangleLines(px, py, panelW, panelH, GOLD);
     const char* t = TextFormat("PILOT %d NAME", nameTarget_ + 1);
     DrawText(t, (cfg::kScreenW - MeasureText(t, 32)) / 2, py + 16, 32, GOLD);
 
-    const int boxX = px + 30, boxY = py + 70;
+    const int boxX = px + 30, boxY = py + 64;
     DrawRectangle(boxX, boxY, panelW - 60, 36, RAYWHITE);
     DrawText(name_.data(), boxX + 8, boxY + 6, 24, DARKBLUE);
     if (std::fmod(GetTime(), 1.0) < 0.5 && nameLen_ < cfg::kNameMax) {
         DrawRectangle(boxX + 8 + MeasureText(name_.data(), 24) + 2, boxY + 6, 3, 24, DARKBLUE);
     }
-    DrawText("Enter: keep     Esc: cancel", px + 30, py + 130, 18, LIGHTGRAY);
+
+    DrawKeyboard(px + 30, py + 116);
+    DrawText("Pad: A type   B erase   Y space   Start keep   Back cancel", px + 30, py + 328, 16, LIGHTGRAY);
+    DrawText("Keys: type the name   Enter keep   Esc cancel", px + 30, py + 352, 16, LIGHTGRAY);
+}
+
+void Game::DrawKeyboard(int x, int y) const
+{
+    assert(state_ == State::EnterName);
+    assert(keyRow_ >= 0 && keyRow_ < kKeyRows && keyCol_ >= 0 && keyCol_ < kKeyCols);
+    const int   gap  = 4;
+    const Color idle = Fade(RAYWHITE, 0.15f);
+
+    for (int r = 0; r < kKeyRows - 1; ++r) {
+        for (int c = 0; c < kKeyCols; ++c) {
+            const bool hot = (r == keyRow_ && c == keyCol_);
+            const int  kx  = x + c * kKeyCell, ky = y + r * kKeyCell;
+            DrawRectangle(kx, ky, kKeyCell - gap, kKeyCell - gap, hot ? GOLD : idle);
+            const char label[2] = {kKeyChars[r][c], '\0'};
+            DrawText(label, kx + (kKeyCell - gap - MeasureText(label, 24)) / 2, ky + 6, 24, hot ? DARKBLUE : RAYWHITE);
+        }
+    }
+
+    const char* wideLabels[3] = {"SPACE", "DEL", "OK"};
+    const int   wy = y + (kKeyRows - 1) * kKeyCell;
+    for (int w = 0; w < 3; ++w) {
+        const bool hot = (keyRow_ == kKeyRows - 1 && static_cast<int>(WideKeyAt(keyCol_)) == w);
+        const int  kx  = x + kWideFirstCol[w] * kKeyCell;
+        const int  kw  = kWideCols[w] * kKeyCell - gap;
+        DrawRectangle(kx, wy, kw, kKeyCell - gap, hot ? GOLD : idle);
+        DrawText(wideLabels[w], kx + (kw - MeasureText(wideLabels[w], 20)) / 2, wy + 8, 20, hot ? DARKBLUE : RAYWHITE);
+    }
 }
 
 void Game::DrawScoreTable(int x, int y) const

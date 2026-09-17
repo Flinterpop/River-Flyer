@@ -7,20 +7,11 @@
 
 #include "raylib.h"
 
+#include "Storage.h"
+
 namespace {
 
 constexpr int kMaxFileBytes = cfg::kMaxProfiles * 64;
-
-const char* FilePath()
-{
-    static char path[512] = {0};
-    if (path[0] == '\0') {
-        const int n = std::snprintf(path, sizeof(path), "%s%s", GetApplicationDirectory(), cfg::kProfilesFile);
-        assert(n > 0 && n < static_cast<int>(sizeof(path)));
-        (void)n;
-    }
-    return path;
-}
 
 void CopyName(std::array<char, cfg::kNameMax + 1>& dst, const char* src, int srcLen)
 {
@@ -51,25 +42,18 @@ bool SameName(const char* a, const char* b)
 void Profiles::Load()
 {
     count_ = 0;
-    if (FileExists(FilePath())) {
-        int size = 0;
-        unsigned char* data = LoadFileData(FilePath(), &size);
-        if (data != nullptr) {
-            if (size > kMaxFileBytes) { size = kMaxFileBytes; }
-            const char* text = reinterpret_cast<const char*>(data);
-            int start = 0;
-            for (int i = 0; i <= size && count_ < cfg::kMaxProfiles; ++i) {
-                if (i < size && text[i] != '\n') { continue; }
-                int len = i - start;
-                if (len > 0 && text[start + len - 1] == '\r') { --len; }
-                if (len > 0) {
-                    CopyName(names_[static_cast<size_t>(count_)], text + start, len);
-                    ++count_;
-                }
-                start = i + 1;
-            }
-            UnloadFileData(data);
+    char      text[kMaxFileBytes + 1] = {0};
+    const int size = storage::Read(cfg::kProfilesFile, text, sizeof(text));   // truncates anything absurd
+    int       start = 0;
+    for (int i = 0; i <= size && count_ < cfg::kMaxProfiles; ++i) {
+        if (i < size && text[i] != '\n') { continue; }
+        int len = i - start;
+        if (len > 0 && text[start + len - 1] == '\r') { --len; }
+        if (len > 0) {
+            CopyName(names_[static_cast<size_t>(count_)], text + start, len);
+            ++count_;
         }
+        start = i + 1;
     }
     if (count_ == 0) {
         // First run: friendly placeholders the girls can rename on the title screen.
@@ -89,9 +73,7 @@ void Profiles::Save() const
         used += std::snprintf(buf + used, sizeof(buf) - static_cast<size_t>(used), "%s\n", names_[static_cast<size_t>(i)].data());
         assert(used < static_cast<int>(sizeof(buf)));
     }
-    if (!SaveFileText(FilePath(), buf)) {
-        TraceLog(LOG_WARNING, "PROFILES: could not write %s", FilePath());
-    }
+    (void)storage::Write(cfg::kProfilesFile, buf);   // already logged on failure; nothing more to do
 }
 
 const char* Profiles::At(int i) const

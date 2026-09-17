@@ -102,4 +102,37 @@ bool MenuConfirm() { return IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) |
 bool MenuBack()    { return IsKeyPressed(KEY_ESCAPE) || AnyPadPressed(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT); }
 bool PausePressed(){ return IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_P) || AnyPadPressed(GAMEPAD_BUTTON_MIDDLE_RIGHT); }
 
+Nav NavPressed()
+{
+    static int prevX = 0, prevY = 0;   // stick direction last frame: a nudge fires once, not every frame
+    constexpr float kStickNav = 0.5f;
+
+    int dx = 0, dy = 0;
+    if (IsKeyPressed(KEY_LEFT)  || AnyPadPressed(GAMEPAD_BUTTON_LEFT_FACE_LEFT))  { dx = -1; }
+    if (IsKeyPressed(KEY_RIGHT) || AnyPadPressed(GAMEPAD_BUTTON_LEFT_FACE_RIGHT)) { dx = 1; }
+    if (IsKeyPressed(KEY_UP)    || AnyPadPressed(GAMEPAD_BUTTON_LEFT_FACE_UP))    { dy = -1; }
+    if (IsKeyPressed(KEY_DOWN)  || AnyPadPressed(GAMEPAD_BUTTON_LEFT_FACE_DOWN))  { dy = 1; }
+
+    int sx = 0, sy = 0;
+    for (int p = 0; p < kPads; ++p) {
+        const float x = PadAxis(p, GAMEPAD_AXIS_LEFT_X);
+        const float y = PadAxis(p, GAMEPAD_AXIS_LEFT_Y);
+        if (x < -kStickNav) { sx = -1; } else if (x > kStickNav) { sx = 1; }
+        if (y < -kStickNav) { sy = -1; } else if (y > kStickNav) { sy = 1; }
+    }
+    if (sx != 0 && sx != prevX) { dx = sx; }
+    if (sy != 0 && sy != prevY) { dy = sy; }
+    prevX = sx;
+    prevY = sy;
+
+    assert(dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1);
+    return Nav {dx, dy};
+}
+
+bool PadTypePressed()   { return AnyPadPressed(GAMEPAD_BUTTON_RIGHT_FACE_DOWN); }
+bool PadErasePressed()  { return AnyPadPressed(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT); }
+bool PadSpacePressed()  { return AnyPadPressed(GAMEPAD_BUTTON_RIGHT_FACE_UP); }
+bool PadDonePressed()   { return AnyPadPressed(GAMEPAD_BUTTON_MIDDLE_RIGHT); }
+bool PadCancelPressed() { return AnyPadPressed(GAMEPAD_BUTTON_MIDDLE_LEFT); }
+
 } // namespace input

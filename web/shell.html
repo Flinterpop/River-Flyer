@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>River Flyer</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; margin: 0 auto; outline: none; }
+  #start {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.5rem; background: #000; color: #ddd; font-family: system-ui, sans-serif; text-align: center; padding: 1rem;
+  }
+  #start h1 { margin: 0; color: #ffd700; font-size: 3rem; }
+  #start button {
+    font: inherit; font-size: 2.2rem; padding: 0.8rem 3rem; border-radius: 1rem; cursor: pointer;
+    border: 3px solid #ffd700; background: #10233a; color: #ffd700;
+  }
+  #start button:focus { outline: 4px solid #fff; }
+  #start p { margin: 0; max-width: 40rem; color: #999; font-size: 1.1rem; line-height: 1.5; }
+  #start[hidden] { display: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="start">
+  <h1>River Flyer</h1>
+  <button id="play" autofocus>Play</button>
+  <p id="hint">Loading&hellip;</p>
+</div>
+<script>
+  // The game does not start until the Play button is pressed. That press is the
+  // user gesture browsers require before a page may play sound or go fullscreen,
+  // and it hands keyboard focus to the canvas. On an Xbox, A on the controller
+  // presses the button.
+  var overlay  = document.getElementById('start');
+  var playBtn  = document.getElementById('play');
+  var hint     = document.getElementById('hint');
+  var canvasEl = document.getElementById('canvas');
+  var runtimeReady = false;
+  var playWanted   = false;
+
+  var Module = {
+    canvas: canvasEl,
+    noInitialRun: true,
+    print:    function (t) { console.log(t); },
+    printErr: function (t) { console.warn(t); },
+    onRuntimeInitialized: function () {
+      runtimeReady = true;
+      hint.textContent = 'Press Play. Keyboard: W A S D and Space. Controller: stick and A. F toggles fullscreen.';
+      if (playWanted) { startGame(); }
+    }
+  };
+
+  function refit() { window.dispatchEvent(new Event('resize')); }   // raylib resizes the canvas on this
+
+  function goFullscreen() {
+    var el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) {
+      var p = el.requestFullscreen();
+      if (p && p.catch) { p.catch(function () {}); }
+    }
+    setTimeout(refit, 300);
+  }
+
+  function startGame() {
+    overlay.hidden = true;
+    goFullscreen();
+    Module.callMain([]);
+    canvasEl.focus();
+    setTimeout(refit, 50);
+  }
+
+  playBtn.addEventListener('click', function () {
+    playWanted = true;
+    if (runtimeReady) { startGame(); } else { playBtn.textContent = 'Loading…'; }
+  });
+
+  window.addEventListener('keydown', function (e) {
+    if (!overlay.hidden) { return; }
+    if (e.key === 'f' || e.key === 'F') {
+      if (document.fullscreenElement) { document.exitFullscreen(); setTimeout(refit, 300); }
+      else { goFullscreen(); }
+    }
+  });
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

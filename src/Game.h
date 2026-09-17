@@ -39,6 +39,10 @@ private:
     void FinishGame();
     void BeginNameEntry(int pilotIndex);
     void CommitName();
+    void TypeChar(char c);
+    void EraseChar();
+    void MoveKeyCursor(int dx, int dy);   // on-screen keyboard
+    void PressKeyCursor();
 
     // ---- per-pilot play ----
     void UpdatePilot(Pilot& p, float dt);
@@ -73,6 +77,7 @@ private:
     void DrawPaused() const;
     void DrawGameOver() const;
     void DrawEnterName() const;
+    void DrawKeyboard(int x, int y) const;
     void DrawScoreTable(int x, int y) const;
     void DrawRefuelling(const Pilot& p) const;
     void DrawStageBanner() const;
@@ -115,4 +120,6 @@ private:
     std::array<char, cfg::kNameMax + 1> name_ {};
     int nameLen_    {0};
     int nameTarget_ {0};
+    int keyCol_     {0};           // on-screen keyboard cursor
+    int keyRow_     {0};
 };

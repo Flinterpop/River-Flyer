@@ -6,22 +6,12 @@
 
 #include "raylib.h"
 
+#include "Storage.h"
+
 namespace {
 
-// Longest sensible file: N entries plus the "#last" line, each well under 64 chars.
+// Longest sensible record: N entries plus the "#last" line, each well under 64 chars.
 constexpr int kMaxFileBytes = (cfg::kHighScoreCount + 1) * 64;
-
-const char* FilePath()
-{
-    // Static buffer: raylib's TextFormat also returns a static, so copy it out once.
-    static char path[512] = {0};
-    if (path[0] == '\0') {
-        const int n = std::snprintf(path, sizeof(path), "%s%s", GetApplicationDirectory(), cfg::kHighScoreFile);
-        assert(n > 0 && n < static_cast<int>(sizeof(path)));
-        (void)n;
-    }
-    return path;
-}
 
 // Copies at most kNameMax visible characters into 'dst', always NUL-terminating.
 void CopyName(std::array<char, cfg::kNameMax + 1>& dst, const char* src, int srcLen)
@@ -59,15 +49,12 @@ void HighScores::Load()
 {
     count_ = 0;
     lastName_[0] = '\0';
-    if (!FileExists(FilePath())) { return; }
 
-    int   size = 0;
-    unsigned char* data = LoadFileData(FilePath(), &size);
-    if (data == nullptr) { return; }
-    if (size > kMaxFileBytes) { size = kMaxFileBytes; }   // ignore anything absurd
+    char      text[kMaxFileBytes + 1] = {0};
+    const int size = storage::Read(cfg::kHighScoreFile, text, sizeof(text));   // truncates anything absurd
+    if (size <= 0) { return; }
 
-    const char* text  = reinterpret_cast<const char*>(data);
-    int         start = 0;
+    int start = 0;
     for (int i = 0; i <= size && count_ < cfg::kHighScoreCount; ++i) {
         if (i < size && text[i] != '\n') { continue; }
         int len = i - start;
@@ -82,7 +69,6 @@ void HighScores::Load()
         }
         start = i + 1;
     }
-    UnloadFileData(data);
 
     // Defensive: keep the table sorted even if the file was hand-edited.
     for (int a = 1; a < count_; ++a) {
@@ -108,9 +94,7 @@ void HighScores::Save() const
         used += std::snprintf(buf + used, sizeof(buf) - static_cast<size_t>(used), "%d\t%s\n", e.score, e.name.data());
         assert(used < static_cast<int>(sizeof(buf)));
     }
-    if (!SaveFileText(FilePath(), buf)) {
-        TraceLog(LOG_WARNING, "HIGHSCORES: could not write %s", FilePath());
-    }
+    (void)storage::Write(cfg::kHighScoreFile, buf);   // already logged on failure; nothing more to do
 }
 
 const HighScores::Entry& HighScores::At(int i) const

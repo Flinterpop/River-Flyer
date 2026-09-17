@@ -5,14 +5,36 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Static CRT to match the x64-windows-static vcpkg triplet.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-find_package(raylib CONFIG REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)   # vcpkg's static raylib target does not carry its glfw dependency
+if(EMSCRIPTEN)
+    # Browser build (preset "web"): raylib is compiled from the same 6.0 source
+    # tarball vcpkg uses, but for PLATFORM=Web. vcpkg has no Emscripten triplet
+    # for raylib, and building upstream directly also sidesteps the vcpkg port's
+    # de-vendored miniaudio (see vcpkg-overlays).
+    include(FetchContent)
+    set(PLATFORM       "Web"    CACHE STRING "raylib platform" FORCE)
+    set(OPENGL_VERSION "ES 3.0" CACHE STRING "raylib GL"       FORCE)   # WebGL2: mipmaps on the NPOT sprites
+    set(BUILD_EXAMPLES OFF      CACHE BOOL   "raylib examples" FORCE)
+    FetchContent_Declare(raylib
+        URL      https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz
+        URL_HASH SHA256=2b3ee1e2120c7a0796b33062c7e9a694dd8a8caa56a96319ac8c8ecf54a90d0b
+    )
+    FetchContent_MakeAvailable(raylib)
+    # raylib exports only ccall to the page. The shell also needs callMain (the
+    # game starts on the Play press). A later -sEXPORTED_RUNTIME_METHODS replaces
+    # an earlier one rather than adding to it, so patch raylib's flag in place.
+    get_target_property(RF_RAYLIB_LINK raylib INTERFACE_LINK_OPTIONS)
+    list(TRANSFORM RF_RAYLIB_LINK REPLACE "^-sEXPORTED_RUNTIME_METHODS=.*$" "-sEXPORTED_RUNTIME_METHODS=ccall,callMain")
+    set_target_properties(raylib PROPERTIES INTERFACE_LINK_OPTIONS "${RF_RAYLIB_LINK}")
+else()
+    # Static CRT to match the x64-windows-static vcpkg triplet.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    find_package(raylib CONFIG REQUIRED)
+    find_package(glfw3 CONFIG REQUIRED)   # vcpkg's static raylib target does not carry its glfw dependency
+endif()
 
 add_executable(scroller
     src/main.cpp
+    src/Canvas.cpp
     src/Game.cpp
     src/Player.cpp
     src/Terrain.cpp
@@ -25,9 +47,25 @@ add_executable(scroller
     src/Input.cpp
     src/Profiles.cpp
     src/Missiles.cpp
+    src/Storage.cpp
 )
 target_include_directories(scroller PRIVATE src)
-target_link_libraries(scroller PRIVATE raylib glfw $<$<PLATFORM_ID:Windows>:winmm gdi32 opengl32 shell32>)
+
+if(EMSCRIPTEN)
+    target_link_libraries(scroller PRIVATE raylib)
+    # index.html + index.js + index.wasm, so the game is the site root when served.
+    set_target_properties(scroller PROPERTIES OUTPUT_NAME index SUFFIX ".html")
+    set(RF_SHELL "${CMAKE_SOURCE_DIR}/web/shell.html")
+    set_property(TARGET scroller APPEND PROPERTY LINK_DEPENDS "${RF_SHELL}")
+    target_link_options(scroller PRIVATE
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sMIN_WEBGL_VERSION=2"
+        "-sMAX_WEBGL_VERSION=2"
+        "--shell-file=${RF_SHELL}"
+    )
+else()
+    target_link_libraries(scroller PRIVATE raylib glfw $<$<PLATFORM_ID:Windows>:winmm gdi32 opengl32 shell32>)
+endif()
 
 if(MSVC)
     target_compile_options(scroller PRIVATE /W4 /WX /permissive-)

@@ -12,6 +12,17 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlays"
       }
+    },
+    {
+      "name": "web",
+      "displayName": "Browser (Emscripten at C:/emsdk)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-web",
+      "toolchainFile": "C:/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
+      }
     }
   ],
   "buildPresets": [
@@ -24,6 +35,10 @@
       "name": "release",
       "configurePreset": "msvc",
       "configuration": "Release"
+    },
+    {
+      "name": "web",
+      "configurePreset": "web"
     }
   ]
 }

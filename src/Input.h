@@ -29,4 +29,14 @@ bool MenuConfirm();   // Enter / Space / pad A
 bool MenuBack();      // Escape / pad B
 bool PausePressed();  // Escape / pad Start
 
+// Name entry drives an on-screen keyboard, so the letter keys must stay free
+// for typing: only the arrow keys, the d-pad and the left stick move the cursor.
+struct Nav { int dx; int dy; };   // each -1, 0 or +1, edge-triggered
+Nav  NavPressed();
+bool PadTypePressed();     // pad A: type the highlighted key
+bool PadErasePressed();    // pad B: backspace
+bool PadSpacePressed();    // pad Y: space
+bool PadDonePressed();     // pad Start: keep the name
+bool PadCancelPressed();   // pad Back / View: cancel
+
 } // namespace input

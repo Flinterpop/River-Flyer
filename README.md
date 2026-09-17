@@ -2,12 +2,12 @@
 
 [![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
 
-[release-badge]: https://img.shields.io/badge/release-v0.4.0-blue
+[release-badge]: https://img.shields.io/badge/release-v0.5.0-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 16 Sep 2026*
+*Last updated: 17 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
@@ -17,6 +17,26 @@ A vertical river scroller in C++20 and raylib, made for three players aged 7 to 
 ## Play
 
 Download `RiverFlyer-<version>-win64.zip` from the [latest release][release-latest], unzip, run `scroller.exe`. It is a single static exe with no installer and nothing else to install.
+
+### On an Xbox, a tablet or a Chromebook
+
+The game also builds to WebAssembly and runs in a browser, which is how it reaches an Xbox: the console's built-in Edge browser, with nothing installed on the console and no developer mode. Unzip `RiverFlyer-<version>-web.zip` from the [latest release][release-latest] (three files) or build it with the `web` preset (see [Browser build](#browser-build)), then:
+
+1. Serve that folder from the PC on the home network, and let it through Windows Firewall for private networks when asked:
+
+   ```powershell
+   python -m http.server 8080 --directory build-web     # or the unzipped folder
+   ```
+
+2. Find the PC's address (`ipconfig`, the IPv4 Address line). On the Xbox open Edge, go to `http://<that address>:8080/`, and press A on **Play**. That press hands the controller to the game and goes fullscreen.
+
+Notes:
+
+- The title screen's `Gamepads connected` line shows whether the controller has reached the page. If it reads 0 while Edge's own cursor still moves, the browser has kept the controller: press Play again with the cursor, or plug in a USB keyboard.
+- In fullscreen the browser takes Esc for itself to leave fullscreen, so pause with P or Start. With a keyboard, F toggles fullscreen.
+- Renaming a pilot shows an on-screen keyboard: the d-pad or stick moves, A types, B erases, Y is a space, Start keeps the name and Back cancels. A real keyboard still types straight in.
+- Scores and pilot names are kept in that browser's local storage, so the Xbox has its own table separate from the PC's.
+- The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
 
 The title screen picks the game: **1 or 2 players**, a **pilot name** for each (Left/Right cycles the saved names, Enter renames), and **Easy / Normal / Hard**. Space, or A on a gamepad, starts. High scores are recorded under the pilot name automatically (both names joined for co-op).
 
@@ -48,7 +68,8 @@ Notes:
 - Pickups float on the water: a **star** for points, a **shield** bubble that pops anything solid it touches for 7 s (banks still count), a **spread** that fires three-way for 10 s, and an **extra plane**.
 - Wildlife is harmless: ducks, jumping fish, deer on the banks and the occasional otter. Fly close to an otter to spot it; the game-over panel keeps count.
 - In a two-player game the score is shared, each pilot has their own planes and fuel, guns aim at whoever is nearer, and the game ends when both are out.
-- Top-ten scores are kept in `highscores.txt`, pilot names in `profiles.txt`, both next to the exe (delete either to start fresh). `BEST` at the top of the screen is the current record.
+- Top-ten scores are kept in `highscores.txt`, pilot names in `profiles.txt`, both next to the exe (delete either to start fresh); the browser build keeps the same two records in the browser's local storage. `BEST` at the top of the screen is the current record.
+- Renaming a pilot (Enter or A on the pilot row) opens an on-screen keyboard that works from a gamepad as well as the keys.
 
 ## Build
 
@@ -71,6 +92,33 @@ The build is `/W4 /WX` with a static CRT; the Release exe depends only on `winmm
 
 The port's exported CMake target also carries no link dependencies, so `CMakeLists.txt` links `glfw::glfw` and the Win32 libraries explicitly.
 
+### Browser build
+
+Requirements: the [Emscripten SDK](https://emscripten.org) installed and activated at `C:\emsdk`:
+
+```powershell
+git clone https://github.com/emscripten-core/emsdk C:\emsdk
+C:\emsdk\emsdk install latest
+C:\emsdk\emsdk activate latest
+```
+
+Nothing needs to be on `PATH`: the `web` preset points at the toolchain file directly and uses Visual Studio's bundled Ninja. vcpkg is not involved; the first configure downloads raylib 6.0's source from GitHub (the same tarball vcpkg uses, checked by hash) and builds it for the web with `PLATFORM=Web`, which also sidesteps both overlay-port problems above.
+
+```powershell
+cmake --preset web
+cmake --build --preset web
+python -m http.server 8080 --directory build-web     # then open http://localhost:8080/
+```
+
+The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB in all; those three files are the whole deployment. Where it differs from the desktop build:
+
+- `web/shell.html` is the page. The game does not start until **Play** is pressed: that press is the user gesture browsers demand before a page may play sound or go fullscreen, so the audio device is created already unlocked. The shell needs `callMain` exported, and raylib's own `-sEXPORTED_RUNTIME_METHODS` would otherwise replace ours, so `CMakeLists.txt` patches raylib's flag rather than adding a second.
+- The browser owns the frame loop (`emscripten_set_main_loop_arg` in `src/main.cpp`) and runs at the display's refresh rate; the desktop build keeps its own 60 fps loop. Movement is time-based, so both play the same.
+- `src/Canvas.*` draws the fixed 960 x 1000 game into a texture and presents it scaled and pillarboxed to whatever the window is, so a 1080p TV shows the whole river. The desktop build goes through the same path at 1:1.
+- `src/Storage.*` keeps the high scores and pilot names in the browser's local storage instead of files next to the exe.
+- raylib is built for WebGL2 (`OPENGL_VERSION "ES 3.0"`) so the non-power-of-two sprites keep their mipmaps; WebGL1 cannot mipmap them and the sprites shimmer.
+- The game code compiles with the same `-Wall -Wextra -Werror -pedantic` as any non-MSVC build; the deprecation warnings during the build come from raylib's bundled miniaudio and stb, not from the game.
+
 ## Layout
 
 | File | Holds |
@@ -87,8 +135,12 @@ The port's exported CMake target also carries no link dependencies, so `CMakeLis
 | `src/Effects.*` | Fixed pools of particle bursts (rock, fuel, plane, splash, chaff), missile smoke and wake foam |
 | `src/Sprites.*` | Textures generated at start-up: 2x sprites with shading, seamless Perlin water and grass tiles, trees, boat, gun, missile site, pickups; swap the `Gen*` bodies for `LoadTexture()` when real art exists |
 | `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud, ding, launch, chaff, radar warning, and the music loop |
-| `src/HighScores.*` | Top-ten table with names, saved as `highscores.txt` beside the exe |
-| `src/Profiles.*` | Pilot names for the title screen, saved as `profiles.txt` beside the exe |
+| `src/HighScores.*` | Top-ten table with names, saved through `Storage` as `highscores.txt` |
+| `src/Profiles.*` | Pilot names for the title screen, saved through `Storage` as `profiles.txt` |
+| `src/Storage.*` | The two saved records: files beside the exe on the desktop, browser local storage on the web |
+| `src/Canvas.*` | Off-screen 960 x 1000 render target, presented scaled and pillarboxed to the real window |
+| `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead |
+| `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
 
 Notes:
 
@@ -100,10 +152,11 @@ Notes:
 Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together, build Release, then tag and publish:
 
 ```powershell
-git tag -a v0.4.0 -m "v0.4.0"
-git push origin main v0.4.0
-Compress-Archive build\Release\scroller.exe RiverFlyer-v0.4.0-win64.zip
-gh release create v0.4.0 RiverFlyer-v0.4.0-win64.zip --title "v0.4.0" --notes-file notes.md
+git tag -a v0.5.0 -m "v0.5.0"
+git push origin main v0.5.0
+Compress-Archive build\Release\scroller.exe RiverFlyer-v0.5.0-win64.zip
+Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.5.0-web.zip
+gh release create v0.5.0 RiverFlyer-v0.5.0-win64.zip RiverFlyer-v0.5.0-web.zip --title "v0.5.0" --notes-file notes.md
 ```
 
 ## License
