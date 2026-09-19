@@ -2,12 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<!-- iPad / iPhone: "Add to Home Screen" then opens the game full screen like an app. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="River Flyer">
+<meta name="theme-color" content="#000000">
 <title>River Flyer</title>
 <link rel="icon" href="data:,">
 <style>
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-  canvas { display: block; margin: 0 auto; outline: none; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; overscroll-behavior: none; }
+  /* touch-action none: the fingers are the game's, not the browser's (no scroll, zoom or pull-to-refresh) */
+  canvas { display: block; margin: 0 auto; outline: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #start {
     position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 1.5rem; background: #000; color: #ddd; font-family: system-ui, sans-serif; text-align: center; padding: 1rem;
@@ -39,6 +46,7 @@
   var hint     = document.getElementById('hint');
   var canvasEl = document.getElementById('canvas');
   var runtimeReady = false;
+  var hasTouch     = navigator.maxTouchPoints > 0 || ('ontouchstart' in window);
   var playWanted   = false;
 
   var Module = {
@@ -48,7 +56,9 @@
     printErr: function (t) { console.warn(t); },
     onRuntimeInitialized: function () {
       runtimeReady = true;
-      hint.textContent = 'Press Play. Keyboard: W A S D and Space. Controller: stick and A. F toggles fullscreen.';
+      hint.textContent = hasTouch
+        ? 'Tap Play. Drag anywhere to steer, hold FIRE. Add this page to the Home Screen to play full screen.'
+        : 'Press Play. Keyboard: W A S D and Space. Controller: stick and A. F toggles fullscreen.';
       if (playWanted) { startGame(); }
     }
   };
@@ -56,9 +66,11 @@
   function refit() { window.dispatchEvent(new Event('resize')); }   // raylib resizes the canvas on this
 
   function goFullscreen() {
-    var el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen) {
-      var p = el.requestFullscreen();
+    var el  = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;   // webkit: older iPadOS Safari
+    var cur = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!cur && req) {
+      var p = req.call(el);
       if (p && p.catch) { p.catch(function () {}); }
     }
     setTimeout(refit, 300);

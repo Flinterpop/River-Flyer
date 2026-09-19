@@ -2,12 +2,12 @@
 
 [![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
 
-[release-badge]: https://img.shields.io/badge/release-v0.6.0-blue
+[release-badge]: https://img.shields.io/badge/release-v0.6.1-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 18 Sep 2026*
+*Last updated: 19 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
@@ -36,6 +36,7 @@ Notes:
 - Renaming a pilot shows an on-screen keyboard: the d-pad or stick moves, A types, B erases, Y is a space, Start keeps the name and Back cancels. A real keyboard still types straight in.
 - Scores and pilot names are kept in that browser's local storage, so the Xbox has its own table separate from the PC's.
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
+- **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. There is no native iOS build (that needs a Mac, Xcode and an Apple developer account), but this is the same game with the same controls.
 
 ### On an Android phone or tablet
 
@@ -128,6 +129,7 @@ The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB 
 - `src/Canvas.*` draws the fixed 960 x 1000 game into a texture and presents it scaled and pillarboxed to whatever the window is, so a 1080p TV shows the whole river. The desktop build goes through the same path at 1:1.
 - `src/Storage.*` keeps the high scores and pilot names in the browser's local storage instead of files next to the exe.
 - raylib is built for WebGL2 (`OPENGL_VERSION "ES 3.0"`) so the non-power-of-two sprites keep their mipmaps; WebGL1 cannot mipmap them and the sprites shimmer.
+- `src/Touch.*` switches on when the page reports a touchscreen (`navigator.maxTouchPoints`), so an iPad, a phone or a touch laptop gets the phone layout while an Xbox or a desktop browser keeps the keyboard and gamepad panels. The shell sets `touch-action: none` on the canvas so fingers reach the game rather than scrolling or zooming the page, and carries the `apple-mobile-web-app-*` tags for the Home Screen. The mouse never stands in for a finger in the browser: browsers synthesise a click after every tap, which would count twice.
 - The game code compiles with the same `-Wall -Wextra -Werror -pedantic` as any non-MSVC build; the deprecation warnings during the build come from raylib's bundled miniaudio and stb, not from the game.
 
 ### Android build
@@ -192,12 +194,12 @@ Notes:
 Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK reads it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
 
 ```powershell
-git tag -a v0.6.0 -m "v0.6.0"
-git push origin main v0.6.0
-Compress-Archive build\Release\scroller.exe RiverFlyer-v0.6.0-win64.zip
-Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.6.0-web.zip
-Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.6.0-android.apk
-gh release create v0.6.0 RiverFlyer-v0.6.0-win64.zip RiverFlyer-v0.6.0-web.zip RiverFlyer-v0.6.0-android.apk --title "v0.6.0" --notes-file notes.md
+git tag -a v0.6.1 -m "v0.6.1"
+git push origin main v0.6.1
+Compress-Archive build\Release\scroller.exe RiverFlyer-v0.6.1-win64.zip
+Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.6.1-web.zip
+Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.6.1-android.apk
+gh release create v0.6.1 RiverFlyer-v0.6.1-win64.zip RiverFlyer-v0.6.1-web.zip RiverFlyer-v0.6.1-android.apk --title "v0.6.1" --notes-file notes.md
 ```
 
 ## License

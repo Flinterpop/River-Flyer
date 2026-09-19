@@ -12,6 +12,10 @@
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
+// Browser build: does this device have a touchscreen (phone, iPad, touch laptop)?
+EM_JS(int, rf_has_touch, (void), {
+    return (navigator.maxTouchPoints > 0 || ('ontouchstart' in window)) ? 1 : 0;
+});
 #endif
 #if defined(__ANDROID__)
 #include <EGL/egl.h>
@@ -146,15 +150,17 @@ int main(int argc, char* argv[])
     assert(argc >= 1 && argv != nullptr);
 #if defined(__ANDROID__)
     (void)argc; (void)argv;
-    touch::SetEnabled(true);
+    touch::SetEnabled(true, false);
     HideSystemBars();
     InitWindow(0, 0, cfg::kTitle);   // 0 x 0: the whole display, so the canvas letterboxes itself
+#elif defined(__EMSCRIPTEN__)
+    (void)argc; (void)argv;
+    touch::SetEnabled(rf_has_touch() != 0, false);   // an iPad or phone in Safari gets the phone layout
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);            // the canvas follows the browser window and fullscreen
+    InitWindow(cfg::kScreenW, cfg::kScreenH, TextFormat("%s v%s", cfg::kTitle, cfg::kVersion));
 #else
     // --touch: try the phone layout on the desktop, with the mouse as a finger.
-    touch::SetEnabled(argc > 1 && std::strcmp(argv[1], "--touch") == 0);
-#if defined(__EMSCRIPTEN__)
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);   // the canvas follows the browser window and fullscreen
-#endif
+    touch::SetEnabled(argc > 1 && std::strcmp(argv[1], "--touch") == 0, true);
     InitWindow(cfg::kScreenW, cfg::kScreenH, TextFormat("%s v%s", cfg::kTitle, cfg::kVersion));
 #endif
     SetExitKey(KEY_NULL);   // Esc pauses; Q on the title screen quits

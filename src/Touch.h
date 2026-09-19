@@ -2,9 +2,11 @@
 
 #include "raylib.h"
 
-// Touch controls for phones and tablets. Off unless enabled: on by default in
-// the Android build, and switchable on the desktop with --touch so the layer
-// can be tried with the mouse (raylib reports the mouse as finger 0).
+// Touch controls for phones and tablets. Off unless enabled: on in the Android
+// build, on in the browser build when the device has a touchscreen, and
+// switchable on the desktop with --touch so the layer can be tried with the
+// mouse standing in for a finger. That stand-in is desktop-only: browsers
+// synthesise a mouse click after every tap, which would count twice.
 //
 // Two modes, chosen by ShowControls(): while flying, the screen is a floating
 // stick (drag anywhere to steer) plus FIRE / CHAFF / JAM / pause buttons drawn
@@ -13,7 +15,7 @@
 // reported in canvas coordinates for the panels to hit-test.
 namespace touch {
 
-void SetEnabled(bool on);
+void SetEnabled(bool on, bool mouseIsFinger);
 bool Enabled();
 
 void Update();                  // once per frame, before Game::Update

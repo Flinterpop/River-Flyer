@@ -25,6 +25,7 @@ struct Frame  { Point pts[kMaxPoints]; int n; };
 struct Circle { Vector2 c; float r; };
 
 bool    enabled  = false;
+bool    mouseToo = false;   // desktop only: the mouse is finger 0
 bool    controls = false;
 Frame   cur {}, prev {};
 
@@ -89,7 +90,7 @@ void ReadPoints(Frame& f)
         f.pts[f.n] = Point {GetTouchPointId(i), GetTouchPosition(i)};
         ++f.n;
     }
-    if (f.n == 0 && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {   // desktop: the mouse is finger 0
+    if (f.n == 0 && mouseToo && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
         f.pts[0] = Point {0, GetMousePosition()};
         f.n = 1;
     }
@@ -146,7 +147,7 @@ void DrawButton(const Circle& c, const char* label, bool held, Color tint)
 
 namespace touch {
 
-void SetEnabled(bool on) { enabled = on; }
+void SetEnabled(bool on, bool mouseIsFinger) { enabled = on; mouseToo = on && mouseIsFinger; }
 bool Enabled()           { return enabled; }
 void ShowControls(bool on) { controls = on; }
 
