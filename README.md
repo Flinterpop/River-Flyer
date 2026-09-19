@@ -2,12 +2,12 @@
 
 [![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
 
-[release-badge]: https://img.shields.io/badge/release-v0.5.0-blue
+[release-badge]: https://img.shields.io/badge/release-v0.6.0-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 17 Sep 2026*
+*Last updated: 18 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
@@ -36,6 +36,18 @@ Notes:
 - Renaming a pilot shows an on-screen keyboard: the d-pad or stick moves, A types, B erases, Y is a space, Start keeps the name and Back cancels. A real keyboard still types straight in.
 - Scores and pilot names are kept in that browser's local storage, so the Xbox has its own table separate from the PC's.
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
+
+### On an Android phone or tablet
+
+Install `RiverFlyer-<version>-android.apk` from the [latest release][release-latest] (or build it, see [Android build](#android-build)): copy it to the device or open the link there, allow the install from that source when asked, and tap the icon. The whole game is in the app; nothing is downloaded and no permissions are requested.
+
+Touch controls, drawn in the black bars around the river on a tall phone and over its corners on a squarer tablet:
+
+- **Drag anywhere** to steer: the plane follows the finger's movement, not its position, so it never hides under a thumb. Push up for the afterburner, pull down for the drag chute.
+- **FIRE** (hold), **CHAFF** (tap) and **JAM** (hold) sit under the right thumb; the pause button is top right. The phone's Back button also pauses, and quits from the title screen.
+- Menus are tapped: **TAP TO FLY** starts, a title row changes when tapped (left half back, right half forward), a pilot's name opens the on-screen keyboard, and the pause panel has FLY ON / QUIT / MUSIC buttons.
+- A gamepad paired with the device works too, with the same buttons as on the Xbox.
+- Scores and names are kept in the app's own storage; uninstalling clears them. Leaving the app (or a call) pauses the game.
 
 The title screen picks the game: **1 or 2 players**, a **pilot name** for each (Left/Right cycles the saved names, Enter renames), and **Easy / Normal / Hard**. Space, or A on a gamepad, starts. High scores are recorded under the pilot name automatically (both names joined for co-op).
 
@@ -118,6 +130,33 @@ The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB 
 - raylib is built for WebGL2 (`OPENGL_VERSION "ES 3.0"`) so the non-power-of-two sprites keep their mipmaps; WebGL1 cannot mipmap them and the sprites shimmer.
 - The game code compiles with the same `-Wall -Wextra -Werror -pedantic` as any non-MSVC build; the deprecation warnings during the build come from raylib's bundled miniaudio and stb, not from the game.
 
+### Android build
+
+Requirements: a JDK 17 or newer, and an Android SDK with platform 34, NDK 27 and CMake 3.31 (the SDK's own CMake bundles the Ninja that Gradle's native build expects). From the SDK's `cmdline-tools`:
+
+```powershell
+sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;27.3.13750724" "cmake;3.31.6"
+```
+
+Tell Gradle where the SDK is with `android\local.properties` containing `sdk.dir=C:/Android/sdk` (forward slashes; the file is git-ignored), then:
+
+```powershell
+cd android
+.\gradlew assembleDebug        # app\build\outputs\apk\debug\app-debug.apk
+.\gradlew assembleRelease      # app\build\outputs\apk\release\app-release.apk
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+```
+
+The first build downloads the Android Gradle Plugin (8.5, matched to the Gradle 8.9 wrapper) and raylib's source tarball; after that it is offline. Where it differs from the other two builds:
+
+- `android/` is a small Gradle project with no Java in it: the manifest declares `android.app.NativeActivity` with `android.app.lib_name = scroller`, and Gradle drives the same `CMakeLists.txt` as the desktop, which under `ANDROID` builds the game as `libscroller.so` against raylib compiled for `PLATFORM=Android`. raylib's `android_main()` calls the game's `main()`.
+- `src/Touch.*` is the touch layer: a floating stick and the FIRE / CHAFF / JAM / pause buttons, drawn in window space after the canvas so they land in the letterbox bars. It also turns taps into canvas coordinates for the panels. On the desktop `scroller.exe --touch` shows the same layout with the mouse as a finger, for trying it without a device.
+- `src/Storage.*` writes the two records to the app's internal data folder, the only place a native activity may write without asking.
+- `src/main.cpp` opens the window at `0 x 0` (the full display) and lets `Canvas` letterbox, and it survives the window being taken away during start-up (a lock screen or a call): raylib 6.0 runs its GL setup twice on Android, and if the surface vanishes between the two passes the second leaves rlgl with no default texture, shader or batch, so the game waits for the surface and runs `rlglInit()` again.
+- The library is linked with `-z max-page-size=16384`: Android 15 and later show a warning dialog (and Google Play refuses uploads) for native code that is not 16 KB-page aligned.
+- The version is read from `src/Config.h` by `android/app/build.gradle`, so the APK follows the same bump as the desktop and web builds. Release builds are signed with the debug key unless `android/keystore.properties` names a real one; that is enough for sideloading.
+- The launcher icon is drawn by `android/make_icon.py` (Pillow), in keeping with the rest of the game generating its own art.
+
 ## Layout
 
 | File | Holds |
@@ -125,7 +164,8 @@ The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB 
 | `src/Config.h` | Every tunable: sizes, speeds, spawn chances, difficulty presets, stage palettes, animation and sound parameters, version |
 | `src/Game.*` | State machine (Title, EnterName, Playing, Paused, GameOver), per-pilot play, collisions, pickups, scoring, HUD and panels |
 | `src/Pilot.h` | One player: plane, controls, planes left, fuel, timers, power-ups |
-| `src/Input.*` | Keyboard and gamepad bindings per pilot; menu navigation |
+| `src/Input.*` | Keyboard and gamepad bindings per pilot; menu navigation; pilot one also takes the touch layer |
+| `src/Touch.*` | Touch controls: floating stick, FIRE / CHAFF / JAM / pause buttons drawn in window space, menu taps in canvas coordinates; the mouse stands in for a finger on the desktop |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
 | `src/Terrain.*` | River strips that scroll down with random drift and periodically split around an island; banks interpolated between strips, sand shoreline, shallows, trees with reflections; stage palettes; pools of rocks, fuel pumps, boats, guns, missile sites, bridges, pickups and critters |
 | `src/Bullets.*` | Fixed bullet pool (with sideways velocity for the spread shot) |
@@ -136,10 +176,11 @@ The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB 
 | `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud, ding, launch, chaff, radar warning, and the music loop |
 | `src/HighScores.*` | Top-ten table with names, saved through `Storage` as `highscores.txt` |
 | `src/Profiles.*` | Pilot names for the title screen, saved through `Storage` as `profiles.txt` |
-| `src/Storage.*` | The two saved records: files beside the exe on the desktop, browser local storage on the web |
+| `src/Storage.*` | The two saved records: files beside the exe on the desktop, browser local storage on the web, the app's internal folder on Android |
 | `src/Canvas.*` | Off-screen 960 x 1000 render target, presented scaled and pillarboxed to the real window |
-| `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead |
+| `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
+| `android/` | Gradle project for the APK: manifest (NativeActivity, portrait), `build.gradle` (drives the root CMake, version from `Config.h`), icon generator |
 
 Notes:
 
@@ -148,14 +189,15 @@ Notes:
 
 ## Releasing
 
-Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together, build Release, then tag and publish:
+Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK reads it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
 
 ```powershell
-git tag -a v0.5.0 -m "v0.5.0"
-git push origin main v0.5.0
-Compress-Archive build\Release\scroller.exe RiverFlyer-v0.5.0-win64.zip
-Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.5.0-web.zip
-gh release create v0.5.0 RiverFlyer-v0.5.0-win64.zip RiverFlyer-v0.5.0-web.zip --title "v0.5.0" --notes-file notes.md
+git tag -a v0.6.0 -m "v0.6.0"
+git push origin main v0.6.0
+Compress-Archive build\Release\scroller.exe RiverFlyer-v0.6.0-win64.zip
+Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.6.0-web.zip
+Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.6.0-android.apk
+gh release create v0.6.0 RiverFlyer-v0.6.0-win64.zip RiverFlyer-v0.6.0-web.zip RiverFlyer-v0.6.0-android.apk --title "v0.6.0" --notes-file notes.md
 ```
 
 ## License

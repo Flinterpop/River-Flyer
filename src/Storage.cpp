@@ -35,13 +35,35 @@ EM_JS(int, rf_storage_write, (const char* key, const char* text), {
 
 #else
 
+#if defined(__ANDROID__)
+#include <android_native_app_glue.h>
+extern "C" struct android_app* GetAndroidApp(void);   // raylib exports it but does not declare it
+#endif
+
 namespace {
 
-// Desktop: "<exe folder><key>". raylib's GetApplicationDirectory() ends in a slash.
+// Where the records live: the exe folder on the desktop (raylib's
+// GetApplicationDirectory() ends in a slash), the app's private internal
+// folder on Android (the only place a NativeActivity can write without asking).
+const char* BaseDir()
+{
+#if defined(__ANDROID__)
+    static char dir[512] = {0};
+    const android_app* app = GetAndroidApp();
+    assert(app != nullptr && app->activity != nullptr);
+    const int n = std::snprintf(dir, sizeof(dir), "%s/", app->activity->internalDataPath);
+    assert(n > 0 && n < static_cast<int>(sizeof(dir)));
+    (void)n;
+    return dir;
+#else
+    return GetApplicationDirectory();
+#endif
+}
+
 const char* PathFor(const char* key)
 {
     static char path[512] = {0};
-    const int n = std::snprintf(path, sizeof(path), "%s%s", GetApplicationDirectory(), key);
+    const int n = std::snprintf(path, sizeof(path), "%s%s", BaseDir(), key);
     assert(n > 0 && n < static_cast<int>(sizeof(path)));
     (void)n;
     return path;

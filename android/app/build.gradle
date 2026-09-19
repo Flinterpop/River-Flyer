@@ -1,0 +1,71 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The version is read from src/Config.h so the APK stays in lockstep with the
+// desktop and web builds (kVersion, vcpkg.json and the README badge).
+def configText = file('../../src/Config.h').getText('UTF-8')
+def versionMatch = (configText =~ /kVersion\s*=\s*"(\d+)\.(\d+)\.(\d+)"/)
+if (!versionMatch.find()) {
+    throw new GradleException('kVersion not found in src/Config.h')
+}
+def rfMajor = versionMatch.group(1).toInteger()
+def rfMinor = versionMatch.group(2).toInteger()
+def rfPatch = versionMatch.group(3).toInteger()
+
+// Optional release key: android/keystore.properties with storeFile, storePassword,
+// keyAlias and keyPassword (git-ignored). Without it, release builds are signed
+// with the debug key, which is enough to sideload onto the family's tablets.
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) {
+    keystoreFile.withInputStream { keystoreProps.load(it) }
+}
+
+android {
+    namespace 'ca.rabidfox.riverflyer'
+    compileSdk 34
+    ndkVersion '27.3.13750724'
+
+    defaultConfig {
+        applicationId 'ca.rabidfox.riverflyer'
+        minSdk 24
+        targetSdk 34
+        versionCode rfMajor * 10000 + rfMinor * 100 + rfPatch
+        versionName "${rfMajor}.${rfMinor}.${rfPatch}"
+
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_static'
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('../../CMakeLists.txt')
+            version '3.31.6'
+        }
+    }
+
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            release {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystoreFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+}

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "Config.h"
+#include "Touch.h"
 
 namespace {
 
@@ -54,6 +55,33 @@ WideKey WideKeyAt(int col)
     if (col < kWideFirstCol[2]) { return WideKey::Del; }
     return WideKey::Ok;
 }
+
+// Panel geometry, shared by the drawing code and the touch hit-tests so a tap
+// lands exactly on what was drawn.
+constexpr int kTitlePanelW = 560, kTitlePanelH = 420;
+constexpr int kTitlePx     = (cfg::kScreenW - kTitlePanelW) / 2;
+constexpr int kTitlePy     = (cfg::kScreenH - kTitlePanelH) / 2 + 40;
+constexpr int kTitleRowY0  = kTitlePy + 30;                          // first row; rows are kTitleRowH apart
+constexpr int kTitleRowH   = 48;
+constexpr int kTitleLabelX = cfg::kScreenW / 2 - 200;
+constexpr int kTitleArrowW = 245;                                    // label + "<" zone, then value, then ">" zone
+constexpr int kTitleValueW = 200;
+constexpr Rectangle kPlayBtn {static_cast<float>(kTitlePx + 30), static_cast<float>(kTitlePy + 270), static_cast<float>(kTitlePanelW - 60), 56.0f};
+
+constexpr int kNamePanelW  = kKeyCols * kKeyCell + 60, kNamePanelH = 390;
+constexpr int kNamePx      = (cfg::kScreenW - kNamePanelW) / 2;
+constexpr int kNamePy      = (cfg::kScreenH - kNamePanelH) / 2;
+constexpr int kNameKeysX   = kNamePx + 30, kNameKeysY = kNamePy + 116;
+
+constexpr int kPausePanelW = 420;
+constexpr int kPausePx     = (cfg::kScreenW - kPausePanelW) / 2;
+int       PausePanelH()    { return touch::Enabled() ? 240 : 140; }   // taller to hold the buttons
+int       PausePy()        { return (cfg::kScreenH - PausePanelH()) / 2; }
+Rectangle PauseFlyBtn()    { return Rectangle {static_cast<float>(kPausePx + 20),  static_cast<float>(PausePy() + 80),  180.0f, 56.0f}; }
+Rectangle PauseTitleBtn()  { return Rectangle {static_cast<float>(kPausePx + 220), static_cast<float>(PausePy() + 80),  180.0f, 56.0f}; }
+Rectangle PauseMusicBtn()  { return Rectangle {static_cast<float>(kPausePx + 20),  static_cast<float>(PausePy() + 160), 380.0f, 50.0f}; }
+
+constexpr float kOverTapDelay = 1.0f;                                // seconds before a tap leaves the game-over panel
 
 } // namespace
 
@@ -144,14 +172,48 @@ void Game::UpdateTitle(float dt)
             case Row::Count:      break;
         }
     }
-    if (kCanQuit && IsKeyPressed(KEY_Q)) { quit_ = true; return; }
+    if (kCanQuit && (IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_BACK))) { quit_ = true; return; }
     if (IsKeyPressed(KEY_SPACE)) { StartGame(); return; }
     if (input::MenuConfirm()) {
         if (row_ == Row::PilotOne)      { BeginNameEntry(0); }
         else if (row_ == Row::PilotTwo) { BeginNameEntry(1); }
         else                            { StartGame(); }
     }
+    if (touch::Tapped()) { TouchTitle(touch::TapPos()); }
     assert(difficulty_ >= 0 && difficulty_ < cfg::kDifficultyCount);
+}
+
+// A tap on a title row acts on it at once: the left part steps back, the
+// right part steps forward, and the name itself opens the rename panel.
+void Game::TouchTitle(Vector2 p)
+{
+    assert(state_ == State::Title);
+    if (CheckCollisionPointRec(p, kPlayBtn)) { StartGame(); return; }
+
+    for (int r = 0; r < static_cast<int>(Row::Count); ++r) {
+        const Row row = static_cast<Row>(r);
+        if (row == Row::PilotTwo && !twoPlayer_) { continue; }
+        const Rectangle band {static_cast<float>(kTitlePx), static_cast<float>(kTitleRowY0 + r * kTitleRowH), static_cast<float>(kTitlePanelW), static_cast<float>(kTitleRowH)};
+        if (!CheckCollisionPointRec(p, band)) { continue; }
+        row_ = row;
+        const bool  onName = (row == Row::PilotOne || row == Row::PilotTwo);
+        const float x      = p.x - static_cast<float>(kTitleLabelX);
+        const int   step   = (x < static_cast<float>(kTitleArrowW)) ? -1 : 1;
+        if (onName && x >= static_cast<float>(kTitleArrowW) && x < static_cast<float>(kTitleArrowW + kTitleValueW)) {
+            BeginNameEntry(row == Row::PilotOne ? 0 : 1);
+            return;
+        }
+        const int n = profiles_.Count();
+        switch (row) {
+            case Row::Players:    twoPlayer_ = !twoPlayer_; break;
+            case Row::PilotOne:   profileIdx_[0] = (profileIdx_[0] + step + n) % n; break;
+            case Row::PilotTwo:   profileIdx_[1] = (profileIdx_[1] + step + n) % n; break;
+            case Row::Difficulty: difficulty_ = (difficulty_ + step + cfg::kDifficultyCount) % cfg::kDifficultyCount; break;
+            case Row::Count:      break;
+        }
+        return;
+    }
+    assert(profileIdx_[0] < profiles_.Count() && profileIdx_[1] < profiles_.Count());
 }
 
 void Game::BeginNameEntry(int pilotIndex)
@@ -201,7 +263,24 @@ void Game::UpdateEnterName(float dt)
 
     if (IsKeyPressed(KEY_ESCAPE) || input::PadCancelPressed()) { state_ = State::Title; return; }
     if ((IsKeyPressed(KEY_ENTER) || input::PadDonePressed()) && nameLen_ > 0) { CommitName(); }
+    if (state_ == State::EnterName && touch::Tapped()) { TouchEnterName(touch::TapPos()); }
     assert(nameLen_ >= 0 && nameLen_ <= cfg::kNameMax);
+}
+
+// A tap on a key presses it; a tap outside the panel cancels.
+void Game::TouchEnterName(Vector2 p)
+{
+    assert(state_ == State::EnterName);
+    const Rectangle panel {static_cast<float>(kNamePx), static_cast<float>(kNamePy), static_cast<float>(kNamePanelW), static_cast<float>(kNamePanelH)};
+    if (!CheckCollisionPointRec(p, panel)) { state_ = State::Title; return; }
+
+    const int c = static_cast<int>(std::floor((p.x - static_cast<float>(kNameKeysX)) / static_cast<float>(kKeyCell)));
+    const int r = static_cast<int>(std::floor((p.y - static_cast<float>(kNameKeysY)) / static_cast<float>(kKeyCell)));
+    if (c < 0 || c >= kKeyCols || r < 0 || r >= kKeyRows) { return; }   // the name box or a hint line
+    keyCol_ = c;
+    keyRow_ = r;
+    PressKeyCursor();
+    assert(keyRow_ >= 0 && keyRow_ < kKeyRows && keyCol_ >= 0 && keyCol_ < kKeyCols);
 }
 
 void Game::TypeChar(char c)
@@ -614,7 +693,14 @@ void Game::FinishGame()
         newRow_ = scores_.Add(who.data(), finalScore_);
         audio_.Play(Audio::Sfx::Fanfare);
     }
+    overT_ = 0.0f;
     state_ = State::GameOver;
+}
+
+void Game::Pause()
+{
+    if (state_ == State::Playing) { state_ = State::Paused; }
+    assert(state_ != State::Playing);
 }
 
 void Game::UpdatePaused()
@@ -624,14 +710,30 @@ void Game::UpdatePaused()
     if (IsKeyPressed(KEY_Q) || input::MenuBack()) {
         for (Pilot& p : pilots_) { p.out = true; }
         state_ = State::Title;
+        return;
     }
+    if (touch::Tapped()) { TouchPaused(touch::TapPos()); }
+}
+
+void Game::TouchPaused(Vector2 p)
+{
+    assert(state_ == State::Paused);
+    if (CheckCollisionPointRec(p, PauseFlyBtn()))   { state_ = State::Playing; }
+    if (CheckCollisionPointRec(p, PauseMusicBtn())) { audio_.ToggleMusic(); }
+    if (CheckCollisionPointRec(p, PauseTitleBtn())) {
+        for (Pilot& p2 : pilots_) { p2.out = true; }
+        state_ = State::Title;
+    }
+    assert(state_ != State::GameOver);
 }
 
 void Game::UpdateGameOver(float dt)
 {
     assert(state_ == State::GameOver);
     effects_.Update(dt);   // let the final explosion finish
+    overT_ += dt;
     if (input::MenuConfirm() || IsKeyPressed(KEY_R)) { state_ = State::Title; }
+    if (touch::Tapped() && overT_ >= kOverTapDelay) { state_ = State::Title; }   // not the fire finger still coming down
 }
 
 // ============================================================================
@@ -835,9 +937,18 @@ void Game::DrawTitleRow(Row row, int y, const char* label, const char* value) co
     assert(label != nullptr && value != nullptr);
     const bool  sel = (row_ == row);
     const Color c   = sel ? GOLD : RAYWHITE;
-    const int   x   = cfg::kScreenW / 2 - 200;
+    const int   x   = kTitleLabelX;
     DrawText(label, x, y, 24, c);
     DrawText(TextFormat("%s %s %s", sel ? "<" : " ", value, sel ? ">" : " "), x + 220, y, 24, c);
+}
+
+void Game::DrawButton(Rectangle r, const char* label, int size)
+{
+    assert(label != nullptr && size > 0);
+    DrawRectangleRec(r, Fade(GOLD, 0.25f));
+    DrawRectangleLinesEx(r, 2.0f, GOLD);
+    DrawText(label, static_cast<int>(r.x + (r.width - static_cast<float>(MeasureText(label, size))) * 0.5f),
+             static_cast<int>(r.y + (r.height - static_cast<float>(size)) * 0.5f), size, GOLD);
 }
 
 void Game::DrawTitle() const
@@ -847,25 +958,31 @@ void Game::DrawTitle() const
     DrawEllipse(static_cast<int>(demoX_) + 10, static_cast<int>(dy) + 40, 14.0f, 9.0f, Fade(BLACK, 0.25f));
     Sprites::DrawIntoRotated(sprites_.Player(), demoX_, dy, cfg::kPlayerW * 1.5f, cfg::kPlayerH * 1.5f, 90.0f, WHITE);
 
-    const int panelW = 560, panelH = 420;
-    const int px = (cfg::kScreenW - panelW) / 2, py = (cfg::kScreenH - panelH) / 2 + 40;
-    DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.7f));
-    DrawRectangleLines(px, py, panelW, panelH, GOLD);
+    const int px = kTitlePx, py = kTitlePy;
+    DrawRectangle(px, py, kTitlePanelW, kTitlePanelH, Fade(BLACK, 0.7f));
+    DrawRectangleLines(px, py, kTitlePanelW, kTitlePanelH, GOLD);
 
     const char* title = "RIVER FLYER";
     DrawText(title, (cfg::kScreenW - MeasureText(title, 72)) / 2 + 3, py - 90 + 3, 72, Fade(BLACK, 0.6f));
     DrawText(title, (cfg::kScreenW - MeasureText(title, 72)) / 2, py - 90, 72, GOLD);
 
-    int y = py + 30;
-    DrawTitleRow(Row::Players,    y, "PLAYERS",    twoPlayer_ ? "2" : "1");            y += 48;
-    DrawTitleRow(Row::PilotOne,   y, "PILOT 1",    profiles_.At(profileIdx_[0]));      y += 48;
+    int y = kTitleRowY0;
+    DrawTitleRow(Row::Players,    y, "PLAYERS",    twoPlayer_ ? "2" : "1");            y += kTitleRowH;
+    DrawTitleRow(Row::PilotOne,   y, "PILOT 1",    profiles_.At(profileIdx_[0]));      y += kTitleRowH;
     if (twoPlayer_) { DrawTitleRow(Row::PilotTwo, y, "PILOT 2", profiles_.At(profileIdx_[1])); }
-    y += 48;
+    y += kTitleRowH;
     DrawTitleRow(Row::Difficulty, y, "DIFFICULTY", Diff().name);                       y += 60;
 
     const int best1 = scores_.BestFor(profiles_.At(profileIdx_[0]));
     DrawText(TextFormat("%s's best: %06d", profiles_.At(profileIdx_[0]), best1), px + 30, y, 18, LIGHTGRAY); y += 40;
 
+    if (touch::Enabled()) {
+        DrawButton(kPlayBtn, "TAP TO FLY", 30);
+        y = static_cast<int>(kPlayBtn.y + kPlayBtn.height) + 14;
+        DrawText("Tap a row to change it, tap a name to rename it", px + 30, y, 16, LIGHTGRAY); y += 26;
+        DrawText("Drag anywhere to steer, hold FIRE; Back pauses", px + 30, y, 16, LIGHTGRAY);
+        return;
+    }
     DrawText(TextFormat("SPACE / A: fly     Enter or A on a pilot: rename     %sM: music %s",
                         kCanQuit ? "Q: quit     " : "", audio_.MusicOn() ? "on" : "off"), px + 30, y, 16, LIGHTGRAY); y += 26;
     DrawText("P1: WASD + Space, C chaff, V jam    P2: arrows + RCtrl, / chaff, . jam", px + 30, y, 16, LIGHTGRAY); y += 26;
@@ -877,12 +994,17 @@ void Game::DrawTitle() const
 void Game::DrawPaused() const
 {
     assert(state_ == State::Paused);
-    const int panelW = 420, panelH = 140;
-    const int px = (cfg::kScreenW - panelW) / 2, py = (cfg::kScreenH - panelH) / 2;
-    DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.7f));
-    DrawRectangleLines(px, py, panelW, panelH, GOLD);
+    const int px = kPausePx, py = PausePy();
+    DrawRectangle(px, py, kPausePanelW, PausePanelH(), Fade(BLACK, 0.7f));
+    DrawRectangleLines(px, py, kPausePanelW, PausePanelH(), GOLD);
     const char* t = "PAUSED";
     DrawText(t, (cfg::kScreenW - MeasureText(t, 40)) / 2, py + 20, 40, GOLD);
+    if (touch::Enabled()) {
+        DrawButton(PauseFlyBtn(),   "FLY ON", 24);
+        DrawButton(PauseTitleBtn(), "QUIT",   24);
+        DrawButton(PauseMusicBtn(), TextFormat("MUSIC %s", audio_.MusicOn() ? "ON" : "OFF"), 20);
+        return;
+    }
     const char* h = "Esc: keep flying     Q: back to title";
     DrawText(h, (cfg::kScreenW - MeasureText(h, 18)) / 2, py + 85, 18, RAYWHITE);
 }
@@ -890,21 +1012,25 @@ void Game::DrawPaused() const
 void Game::DrawEnterName() const
 {
     assert(state_ == State::EnterName);
-    const int panelW = kKeyCols * kKeyCell + 60, panelH = 390;
-    const int px = (cfg::kScreenW - panelW) / 2, py = (cfg::kScreenH - panelH) / 2;
-    DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.85f));
-    DrawRectangleLines(px, py, panelW, panelH, GOLD);
+    const int px = kNamePx, py = kNamePy;
+    DrawRectangle(px, py, kNamePanelW, kNamePanelH, Fade(BLACK, 0.85f));
+    DrawRectangleLines(px, py, kNamePanelW, kNamePanelH, GOLD);
     const char* t = TextFormat("PILOT %d NAME", nameTarget_ + 1);
     DrawText(t, (cfg::kScreenW - MeasureText(t, 32)) / 2, py + 16, 32, GOLD);
 
     const int boxX = px + 30, boxY = py + 64;
-    DrawRectangle(boxX, boxY, panelW - 60, 36, RAYWHITE);
+    DrawRectangle(boxX, boxY, kNamePanelW - 60, 36, RAYWHITE);
     DrawText(name_.data(), boxX + 8, boxY + 6, 24, DARKBLUE);
     if (std::fmod(GetTime(), 1.0) < 0.5 && nameLen_ < cfg::kNameMax) {
         DrawRectangle(boxX + 8 + MeasureText(name_.data(), 24) + 2, boxY + 6, 3, 24, DARKBLUE);
     }
 
-    DrawKeyboard(px + 30, py + 116);
+    DrawKeyboard(kNameKeysX, kNameKeysY);
+    if (touch::Enabled()) {
+        DrawText("Tap the keys, then OK", px + 30, py + 328, 16, LIGHTGRAY);
+        DrawText("Tap outside this panel to cancel", px + 30, py + 352, 16, LIGHTGRAY);
+        return;
+    }
     DrawText("Pad: A type   B erase   Y space   Start keep   Back cancel", px + 30, py + 328, 16, LIGHTGRAY);
     DrawText("Keys: type the name   Enter keep   Esc cancel", px + 30, py + 352, 16, LIGHTGRAY);
 }
@@ -972,7 +1098,7 @@ void Game::DrawGameOver() const
     const int panelW = 400, panelH = 470;
     const int px = (cfg::kScreenW - panelW) / 2, py = (cfg::kScreenH - panelH) / 2;
     const char* msg1 = "Oh no! Out of planes!";
-    const char* msg2 = "SPACE: back to the title";
+    const char* msg2 = touch::Enabled() ? "Tap: back to the title" : "SPACE: back to the title";
     DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.7f));
     DrawRectangleLines(px, py, panelW, panelH, GOLD);
     DrawText(msg1, (cfg::kScreenW - MeasureText(msg1, 30)) / 2, py + 16, 30, GOLD);

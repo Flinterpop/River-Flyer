@@ -24,6 +24,8 @@ public:
     void Update(float dt);
     void Draw() const;
     bool WantsQuit() const { return quit_; }
+    bool Playing() const   { return state_ == State::Playing; }
+    void Pause();          // when the host was away (backgrounded, stalled): no effect outside play
 
 private:
     // Title-screen rows.
@@ -43,6 +45,9 @@ private:
     void EraseChar();
     void MoveKeyCursor(int dx, int dy);   // on-screen keyboard
     void PressKeyCursor();
+    void TouchTitle(Vector2 p);           // a tap on a panel, in canvas coordinates
+    void TouchEnterName(Vector2 p);
+    void TouchPaused(Vector2 p);
 
     // ---- per-pilot play ----
     void UpdatePilot(Pilot& p, float dt);
@@ -79,6 +84,7 @@ private:
     void DrawEnterName() const;
     void DrawKeyboard(int x, int y) const;
     void DrawScoreTable(int x, int y) const;
+    static void DrawButton(Rectangle r, const char* label, int size);   // tap target on a panel
     void DrawRefuelling(const Pilot& p) const;
     void DrawStageBanner() const;
     void DrawPowerUps(const Pilot& p) const;
@@ -115,6 +121,7 @@ private:
     int   finalScore_ {0};         // frozen when the last plane is lost
     int   newRow_     {-1};        // row of the entry just added, or -1
     float shake_      {0.0f};      // seconds of screen shake left
+    float overT_      {0.0f};      // seconds on the game-over panel: taps count only after a moment
 
     // Name being typed (title-screen rename); which pilot it is for.
     std::array<char, cfg::kNameMax + 1> name_ {};

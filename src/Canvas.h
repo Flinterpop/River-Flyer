@@ -18,6 +18,10 @@ public:
     void End();
     void Present() const;   // inside BeginDrawing/EndDrawing: blit to the window, letterboxed
 
+    // Where the canvas lands in the window this frame (window pixels). The
+    // touch layer uses it to map fingers back into canvas coordinates.
+    static Rectangle Placement();
+
 private:
     RenderTexture2D target_ {};
 };

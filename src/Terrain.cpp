@@ -190,7 +190,12 @@ Terrain::Strip Terrain::MakeNextStrip(const Strip& above)
     const float ihalf = next.islandWidth * 0.5f;
     float ic = above.islandCentre + RandomDrift(8.0f);
     if (above.islandWidth == 0.0f && next.islandWidth == 0.0f) { ic = next.centreX; }   // follow the river when idle
-    next.islandCentre = Clamp(ic, left + cfg::kChannelMinW + ihalf, right - cfg::kChannelMinW - ihalf);
+    // When the river is exactly the minimum width for this island the two
+    // bounds are equal on paper; rounding (FMA on ARM) can cross them by an ulp.
+    float lo = left + cfg::kChannelMinW + ihalf;
+    float hi = right - cfg::kChannelMinW - ihalf;
+    if (lo > hi) { lo = hi = (lo + hi) * 0.5f; }
+    next.islandCentre = Clamp(ic, lo, hi);
 
     assert(left >= 0.0f && right <= static_cast<float>(cfg::kScreenW));
     assert(next.islandWidth == 0.0f || (next.islandCentre - ihalf - left >= cfg::kChannelMinW - 0.01f));
