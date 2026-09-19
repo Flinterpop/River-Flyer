@@ -2,7 +2,7 @@
 
 [![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
 
-[release-badge]: https://img.shields.io/badge/release-v0.6.1-blue
+[release-badge]: https://img.shields.io/badge/release-v0.6.2-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
@@ -195,12 +195,12 @@ Notes:
 Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK reads it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
 
 ```powershell
-git tag -a v0.6.1 -m "v0.6.1"
-git push origin main v0.6.1
-Compress-Archive build\Release\scroller.exe RiverFlyer-v0.6.1-win64.zip
-Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.6.1-web.zip
-Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.6.1-android.apk
-gh release create v0.6.1 RiverFlyer-v0.6.1-win64.zip RiverFlyer-v0.6.1-web.zip RiverFlyer-v0.6.1-android.apk --title "v0.6.1" --notes-file notes.md
+git tag -a v0.6.2 -m "v0.6.2"
+git push origin main v0.6.2
+Compress-Archive build\Release\scroller.exe RiverFlyer-v0.6.2-win64.zip
+Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.6.2-web.zip
+Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.6.2-android.apk
+gh release create v0.6.2 RiverFlyer-v0.6.2-win64.zip RiverFlyer-v0.6.2-web.zip RiverFlyer-v0.6.2-android.apk --title "v0.6.2" --notes-file notes.md
 ```
 
 ## License
