@@ -36,7 +36,7 @@ Notes:
 - Renaming a pilot shows an on-screen keyboard: the d-pad or stick moves, A types, B erases, Y is a space, Start keeps the name and Back cancels. A real keyboard still types straight in.
 - Scores and pilot names are kept in that browser's local storage, so the Xbox has its own table separate from the PC's.
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
-- **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. There is no native iOS build (that needs a Mac, Xcode and an Apple developer account), but this is the same game with the same controls.
+- **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. A proper iPad app that installs with an icon is in [`ios/`](ios/README.md): it wraps this same browser build in a full-screen web view and has to be built on a Mac with Xcode (see that folder's README for the steps).
 
 ### On an Android phone or tablet
 
@@ -183,6 +183,7 @@ The first build downloads the Android Gradle Plugin (8.5, matched to the Gradle 
 | `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
 | `android/` | Gradle project for the APK: manifest (NativeActivity, portrait), `build.gradle` (drives the root CMake, version from `Config.h`), icon generator |
+| `ios/` | iPad / iPhone app: a `WKWebView` around the browser build, generated with XcodeGen and built on a Mac by `make-ios.sh`; version from `Config.h` |
 
 Notes:
 

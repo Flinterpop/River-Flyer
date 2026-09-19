@@ -1,7 +1,9 @@
 """Draw the launcher icon: a plane over a winding river between green banks.
 
 Writes app/src/main/res/mipmap-<density>/ic_launcher.png at the five
-standard densities. Needs Pillow. Run from the android/ folder:
+standard densities, and the opaque 1024 px icon the iPad app in ../ios uses
+(iOS masks its own corners and rejects alpha). Needs Pillow. Run from the
+android/ folder:
 
     python make_icon.py
 """
@@ -16,6 +18,7 @@ from PIL import Image, ImageDraw
 # dp size of a launcher icon is 48; each density is a multiple of that.
 DENSITIES: dict[str, int] = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 SUPERSAMPLE: int = 4  # draw big, shrink with a filter: smooth edges at every size
+IOS_SIZE: int = 1024
 
 GRASS = (72, 140, 52)
 WATER = (52, 120, 200)
@@ -34,7 +37,7 @@ def river_edges(y: float, size: float) -> tuple[float, float]:
     return centre - half, centre + half
 
 
-def draw_icon(size: int) -> Image.Image:
+def draw_icon(size: int, rounded: bool = True) -> Image.Image:
     """The icon at 'size' pixels square, rendered SUPERSAMPLE times larger then shrunk."""
     assert size > 0
     big = size * SUPERSAMPLE
@@ -56,9 +59,12 @@ def draw_icon(size: int) -> Image.Image:
     draw.polygon([(cx - 2 * s, cy + 12 * s), (cx + 2 * s, cy + 12 * s), (cx, cy + 18 * s)], fill=FLAME)
 
     # Rounded corners so it reads as one tile on launchers that do not mask icons.
-    mask = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, big - 1, big - 1], radius=big // 6, fill=255)
-    img.putalpha(mask)
+    if rounded:
+        mask = Image.new("L", (big, big), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, big - 1, big - 1], radius=big // 6, fill=255)
+        img.putalpha(mask)
+    else:
+        img = img.convert("RGB")
 
     small = img.resize((size, size), Image.Resampling.LANCZOS)
     assert small.size == (size, size)
@@ -75,6 +81,12 @@ def main() -> int:
         draw_icon(size).save(out)
         assert out.stat().st_size > 0
         print(f"wrote {out.relative_to(root.parent.parent.parent)} ({size}px)")
+    ios = Path(__file__).resolve().parent.parent / "ios" / "RiverFlyer" / "Assets.xcassets" / "AppIcon.appiconset"
+    ios.mkdir(parents=True, exist_ok=True)
+    ios_out = ios / "icon-1024.png"
+    draw_icon(IOS_SIZE, rounded=False).save(ios_out)
+    assert ios_out.stat().st_size > 0
+    print(f"wrote {ios_out.relative_to(ios.parents[3])} ({IOS_SIZE}px, opaque)")
     return 0
 
 
