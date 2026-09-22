@@ -30,8 +30,9 @@ void SetName(std::array<char, cfg::kNameMax + 1>& dst, const char* src)
     dst[static_cast<size_t>(n)] = '\0';
 }
 
-// In the browser the page cannot close itself, so Q on the title does nothing there.
-#if defined(__EMSCRIPTEN__)
+// In the browser the page cannot close itself, and an iOS app is not meant
+// to, so Q on the title does nothing there.
+#if defined(__EMSCRIPTEN__) || defined(RF_IOS)
 constexpr bool kCanQuit = false;
 #else
 constexpr bool kCanQuit = true;
@@ -980,7 +981,11 @@ void Game::DrawTitle() const
         DrawButton(kPlayBtn, "TAP TO FLY", 30);
         y = static_cast<int>(kPlayBtn.y + kPlayBtn.height) + 14;
         DrawText("Tap a row to change it, tap a name to rename it", px + 30, y, 16, LIGHTGRAY); y += 26;
+#if defined(__ANDROID__)
         DrawText("Drag anywhere to steer, hold FIRE; Back pauses", px + 30, y, 16, LIGHTGRAY);
+#else
+        DrawText("Drag anywhere to steer, hold FIRE; top-right button pauses", px + 30, y, 16, LIGHTGRAY);
+#endif
         return;
     }
     DrawText(TextFormat("SPACE / A: fly     Enter or A on a pilot: rename     %sM: music %s",

@@ -1,0 +1,241 @@
+raylib 6.0, SDL backend, on iOS. Applied to the fetched source by
+ios/apply-patch.cmake (CMakeLists.txt, IOS branch). Two things:
+
+1. Retina. UIKit ignores the size passed to SDL_CreateWindow (a window is
+   the whole screen) and with SDL_WINDOW_HIGH_PIXEL_DENSITY the drawable is
+   nativeScale times the size in points. The SDL backend never fills
+   raylib's screenScale matrix, so it would draw in the bottom-left third
+   of the display and report the wrong screen size. UpdateWindowSizeSDL()
+   reads both sizes from the window (screen = points, for input and layout;
+   render = pixels) and sets screenScale, at start-up and on every resize
+   event (SDL3 sends one in points and one in pixels; both are ignored in
+   favour of asking the window).
+
+2. Default framebuffer. EAGL has no framebuffer 0: the GL view owns one and
+   SDL publishes its id as a window property. rlgl binds 0 whenever it
+   returns to the screen (EndTextureMode) or unbinds after creating a
+   render texture, which on iOS draws into nothing. RL_DEFAULT_FRAMEBUFFER
+   is that id on iOS and 0 elsewhere. Likewise EAGL presents whichever
+   renderbuffer is bound, and rlgl unbinds after creating a render
+   texture's depth buffer, so SwapScreenBuffer() rebinds the view's first.
+
+3. Audio session. miniaudio's default category is PlayAndRecord, which
+   opens the microphone path; a game wants Ambient (playback only, mixed
+   with other audio, obeys the mute switch), as SDL itself defaults to.
+   PlayAndRecord also deadlocks the iOS Simulator's audio server.
+
+4. Simulator audio. The iOS Simulator's audio server can hang on the
+   RemoteIO unit's RPCs (initialize, start), and AudioToolbox then aborts
+   the process rather than returning an error, so nothing above it can
+   recover. Simulator builds run without an audio device unless the
+   RAYLIB_SIMULATOR_AUDIO environment variable is set; a real iPad or
+   iPhone runs the unmodified code.
+
+diff -ru src/platforms/rcore_desktop_sdl.c ../raylib-6.0/src/platforms/rcore_desktop_sdl.c
+--- a/src/platforms/rcore_desktop_sdl.c	2026-09-20 22:19:39
++++ b/src/platforms/rcore_desktop_sdl.c	2026-09-20 22:59:48
+@@ -435,6 +435,9 @@
+ static KeyboardKey ConvertScancodeToKey(SDL_Scancode sdlScancode);  // Help convert SDL scancodes to raylib key
+ static int GetCodepointNextSDL(const char *text, int *codepointSize); // Get next codepoint in a byte sequence and bytes processed
+ static void UpdateTouchPointsSDL(SDL_TouchFingerEvent event); // Update CORE input touch point info from SDL touch data
++#if defined(SDL_PLATFORM_IOS)
++static void UpdateWindowSizeSDL(void);                          // Read screen (points) and render (pixels) sizes from the window
++#endif
+ 
+ //----------------------------------------------------------------------------------
+ // Module Functions Declaration
+@@ -1265,6 +1268,11 @@
+     rlCopyFramebuffer(0, 0, CORE.Window.render.width, CORE.Window.render.height, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, surface->pixels);
+     SDL_UpdateWindowSurface(platform.window);
+ #else
++#if defined(SDL_PLATFORM_IOS)
++    // EAGL presents whatever renderbuffer is bound, and SDL expects the view's
++    // to still be; rlgl unbinds after creating a render texture's depth buffer.
++    glBindRenderbuffer(GL_RENDERBUFFER, (GLuint)SDL_GetNumberProperty(SDL_GetWindowProperties(platform.window), SDL_PROP_WINDOW_UIKIT_OPENGL_RENDERBUFFER_NUMBER, 0));
++#endif
+     SDL_GL_SwapWindow(platform.window);
+ #endif
+ }
+@@ -1493,6 +1501,14 @@
+                     case SDL_WINDOWEVENT_RESIZED:
+                     case SDL_WINDOWEVENT_SIZE_CHANGED:
+                     {
++#if defined(SDL_PLATFORM_IOS)
++                        // The payload is points for one of these events and
++                        // pixels for the other; ask the window for both.
++                        UpdateWindowSizeSDL();
++                        SetupViewport(CORE.Window.render.width, CORE.Window.render.height);
++                        CORE.Window.resizedLastFrame = true;
++                        break;
++#endif
+                         const int width = event.window.data1;
+                         const int height = event.window.data2;
+                         SetupViewport(width, height);
+@@ -2063,10 +2079,18 @@
+         CORE.Window.display.width = displayMode.w;
+         CORE.Window.display.height = displayMode.h;
+ 
++#if defined(SDL_PLATFORM_IOS)
++        // iOS: UIKit ignores the requested size (the window is the whole
++        // screen) and, with SDL_WINDOW_HIGH_PIXEL_DENSITY, the drawable is
++        // nativeScale times the size in points. Take both from the window:
++        // screen = points (input, layout), render = pixels, screenScale bridges them.
++        UpdateWindowSizeSDL();
++#else
+         CORE.Window.render.width = CORE.Window.screen.width;
+         CORE.Window.render.height = CORE.Window.screen.height;
+         CORE.Window.currentFbo.width = CORE.Window.render.width;
+         CORE.Window.currentFbo.height = CORE.Window.render.height;
++#endif
+ 
+         TRACELOG(LOG_INFO, "DISPLAY: Device initialized successfully %s",
+             FLAG_IS_SET(CORE.Window.flags, FLAG_WINDOW_HIGHDPI)? "(HighDPI)" : "");
+@@ -2214,6 +2238,31 @@
+ }
+ 
+ // Update CORE input touch point info from SDL touch data
++#if defined(SDL_PLATFORM_IOS)
++// The GL view's framebuffer, which rlgl treats as the screen (see rlgl.h).
++unsigned int rlGetDefaultFramebuffer(void)
++{
++    if (platform.window == NULL) return 0;
++    return (unsigned int)SDL_GetNumberProperty(SDL_GetWindowProperties(platform.window), SDL_PROP_WINDOW_UIKIT_OPENGL_FRAMEBUFFER_NUMBER, 0);
++}
++
++static void UpdateWindowSizeSDL(void)
++{
++    int w = 0, h = 0, pw = 0, ph = 0;
++    SDL_GetWindowSize(platform.window, &w, &h);
++    SDL_GetWindowSizeInPixels(platform.window, &pw, &ph);
++    if ((w <= 0) || (h <= 0) || (pw <= 0) || (ph <= 0)) return;
++
++    CORE.Window.screen.width = w;
++    CORE.Window.screen.height = h;
++    CORE.Window.render.width = pw;
++    CORE.Window.render.height = ph;
++    CORE.Window.currentFbo.width = pw;
++    CORE.Window.currentFbo.height = ph;
++    CORE.Window.screenScale = MatrixScale((float)pw/(float)w, (float)ph/(float)h, 1.0f);
++}
++#endif
++
+ static void UpdateTouchPointsSDL(SDL_TouchFingerEvent event)
+ {
+ #if defined(USING_VERSION_SDL3) // SDL3
+diff -ru src/raudio.c ../raylib-6.0/src/raudio.c
+--- a/src/raudio.c	2026-09-20 22:19:39
++++ b/src/raudio.c	2026-09-20 22:57:40
+@@ -73,6 +73,9 @@
+     #include "raudio.h"
+ #else
+     #include "raylib.h"         // Declares module functions
++#if defined(__APPLE__)
++    #include <TargetConditionals.h>     // TARGET_OS_SIMULATOR
++#endif
+ 
+     #include "config.h"         // Defines module configuration flags
+ #endif
+@@ -463,9 +466,25 @@
+ // Initialize audio device
+ void InitAudioDevice(void)
+ {
++#if defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
++    // The iOS Simulator's audio server can hang on the RemoteIO unit's RPCs
++    // (initialize, start), and AudioToolbox then aborts the process rather
++    // than returning an error. Simulator builds run silent unless asked.
++    if (getenv("RAYLIB_SIMULATOR_AUDIO") == NULL)
++    {
++        TRACELOG(LOG_WARNING, "AUDIO: iOS Simulator, no device (set RAYLIB_SIMULATOR_AUDIO=1 to try one)");
++        return;
++    }
++#endif
+     // Init audio context
+     ma_context_config ctxConfig = ma_context_config_init();
+     ma_log_callback_init(OnLog, NULL);
++#if defined(MA_APPLE_MOBILE)
++    // Playback only, mixed with other audio and silenced by the mute switch,
++    // like any game. miniaudio's default tries PlayAndRecord first, which
++    // opens the microphone path (and hangs the iOS Simulator's audio server).
++    ctxConfig.coreaudio.sessionCategory = ma_ios_session_category_ambient;
++#endif
+ 
+     ma_result result = ma_context_init(NULL, 0, &ctxConfig, &AUDIO.System.context);
+     if (result != MA_SUCCESS)
+diff -ru src/rlgl.h ../raylib-6.0/src/rlgl.h
+--- a/src/rlgl.h	2026-09-20 22:19:39
++++ b/src/rlgl.h	2026-09-20 22:29:52
+@@ -828,6 +828,20 @@
+ 
+ #if defined(RLGL_IMPLEMENTATION)
+ 
++// The framebuffer that is the screen. It is 0 everywhere except iOS, where
++// EAGL has no default framebuffer: the GL view owns one, and the platform
++// layer (rcore_desktop_sdl.c) reports its id. Used wherever rlgl returns to
++// the screen after a render texture, or unbinds after creating one.
++#if defined(__APPLE__)
++    #include <TargetConditionals.h>
++#endif
++#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
++    unsigned int rlGetDefaultFramebuffer(void);     // Defined by the platform layer
++    #define RL_DEFAULT_FRAMEBUFFER rlGetDefaultFramebuffer()
++#else
++    #define RL_DEFAULT_FRAMEBUFFER 0
++#endif
++
+ // Expose OpenGL functions from glad in raylib
+ #if defined(BUILD_LIBTYPE_SHARED)
+     #define GLAD_API_CALL_EXPORT
+@@ -1883,7 +1897,7 @@
+ void rlDisableFramebuffer(void)
+ {
+ #if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2) || defined(GRAPHICS_API_OPENGL_SOFTWARE))
+-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    glBindFramebuffer(GL_FRAMEBUFFER, RL_DEFAULT_FRAMEBUFFER);
+ #endif
+ }
+ 
+@@ -3772,7 +3786,7 @@
+     pixels = RL_CALLOC(rlGetPixelDataSize(width, height, RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8), 1);
+     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+ 
+-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    glBindFramebuffer(GL_FRAMEBUFFER, RL_DEFAULT_FRAMEBUFFER);
+ 
+     // Clean up temporal fbo
+     rlUnloadFramebuffer(fboId);
+@@ -3847,7 +3861,7 @@
+ 
+ #if (defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2) || defined(GRAPHICS_API_OPENGL_SOFTWARE))
+     glGenFramebuffers(1, &fboId);         // Create the framebuffer object
+-    glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind any framebuffer
++    glBindFramebuffer(GL_FRAMEBUFFER, RL_DEFAULT_FRAMEBUFFER); // Unbind any framebuffer
+ #endif
+ 
+     return fboId;
+@@ -3888,7 +3902,7 @@
+         default: break;
+     }
+ 
+-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    glBindFramebuffer(GL_FRAMEBUFFER, RL_DEFAULT_FRAMEBUFFER);
+ #endif
+ }
+ 
+@@ -3916,7 +3930,7 @@
+         }
+     }
+ 
+-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    glBindFramebuffer(GL_FRAMEBUFFER, RL_DEFAULT_FRAMEBUFFER);
+ 
+     result = (status == GL_FRAMEBUFFER_COMPLETE);
+ #endif
+@@ -3946,7 +3960,7 @@
+     // NOTE: If a texture object is deleted while its image is attached to the *currently bound* framebuffer,
+     // the texture image is automatically detached from the currently bound framebuffer
+ 
+-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    glBindFramebuffer(GL_FRAMEBUFFER, RL_DEFAULT_FRAMEBUFFER);
+     glDeleteFramebuffers(1, &id);
+ 
+     TRACELOG(RL_LOG_INFO, "FBO: [ID %i] Unloaded framebuffer from VRAM (GPU)", id);

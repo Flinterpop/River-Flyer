@@ -1,66 +1,97 @@
 # River Flyer for iPad and iPhone
 
-*Last updated: 19 Sep 2026*
+*Last updated: 20 Sep 2026*
 
-This folder turns River Flyer into a real iPadOS / iOS app. It was written on a Windows PC, where nothing Apple can be built or run, so it is a handover: everything here is meant to be run on a Mac, and the first run there is the first test. The notes below say what to expect and what to check.
+This folder builds River Flyer as a native iPadOS / iOS app: the same C++ game as the Windows, browser and Android builds, compiled for arm64 with Xcode. Everything runs on a Mac.
 
 ## How it works
 
-The app is a full-screen `WKWebView` that hosts the game's browser build (the same three files as `RiverFlyer-<version>-web.zip`: `index.html`, `index.js`, `index.wasm`). The touch controls added in v0.6.1 are the ones it uses. WebAssembly in a `WKWebView` runs JIT-compiled at native speed, audio and multi-touch go through Safari's engine, and the result installs with an icon like any other app. There is no raylib-native iOS build: raylib has no iOS platform, and a port would need an SDL backend, a cross-compiled raylib and an Xcode project that cannot be checked from a PC. This route is the same game with the same controls and none of that risk.
+raylib has no iOS platform of its own, so the game runs on raylib's SDL backend over [SDL3](https://libsdl.org), which supplies the UIKit window, multi-touch, the Game Controller framework (MFi and Xbox / PlayStation pads) and the app life-cycle events, and draws with OpenGL ES 3.0. Apple deprecated OpenGL ES in 2018 but still ships it (it runs on Metal underneath); if it ever goes, the swap is to ANGLE, below the game code. There is no Swift or Objective-C in the app; miniaudio (raylib's audio) is compiled as Objective-C because its iOS backend uses `AVAudioSession`.
 
-The files are served to the web view from the app bundle through a custom `riverflyer://app/` URL scheme (`GameViewController.swift`) rather than `file://`, because the Emscripten loader fetches `index.wasm` with `fetch()`, which WebKit refuses for `file://`, and `WebAssembly.instantiateStreaming` insists on the `application/wasm` content type; the scheme handler supplies both.
+The build is the root `CMakeLists.txt` under `IOS`, configured with CMake's own iOS support and the Xcode generator (preset `ios` in `../CMakePresets.json`), so the result is an ordinary Xcode project you can open, sign and run from Xcode like any other. raylib and SDL3 are fetched as source tarballs on the first configure and built into the app; raylib's sources are compiled directly (its own CMake hard-codes SDL2 for the SDL backend), with one patch.
 
 | File | Holds |
 |---|---|
-| `make-ios.sh` | The script: checks tools, copies in the browser build, generates the Xcode project, builds |
-| `project.yml` | XcodeGen spec; `make-ios.sh` fills in the version, build number and team |
-| `RiverFlyer/AppDelegate.swift` | Window and root view controller |
-| `RiverFlyer/GameViewController.swift` | The web view, full-screen behaviour, and the bundle scheme handler |
-| `RiverFlyer/Assets.xcassets` | App icon (drawn by `../android/make_icon.py`, 1024 px, opaque) |
-| `RiverFlyer/web/` | The three browser-build files, copied in by the script (git-ignored) |
+| `make-ios.sh` | The script: checks tools, configures, builds with `xcodebuild`, and installs on a simulator or a device |
+| `raylib-sdl-ios.patch` | raylib 6.0 on iOS: Retina scaling, EAGL's default framebuffer, the audio session category, and the Simulator's audio server (see its header) |
+| `apply-patch.cmake` | Applies the patch to the fetched raylib source, once |
+| `Info.plist.in` | The app's `Info.plist`; CMake fills in the version (from `../src/Config.h`), bundle id `ca.rabidfox.riverflyer`, portrait only, iOS 15 or newer |
+| `glshim/` | `<GLES3/gl3.h>` and `<GLES2/gl2ext.h>` as rlgl includes them, mapped to Apple's `<OpenGLES/...>` headers |
+| `Assets.xcassets` | App icon (drawn by `../android/make_icon.py`, 1024 px) |
 
-Notes:
-
-- The version and build number come from `../src/Config.h`, like the Android APK, so all builds stay in lockstep.
-- Portrait only, status bar hidden, home indicator auto-hides, bottom-edge swipes are deferred (a game owns the whole screen). Bundle id `ca.rabidfox.riverflyer`, deployment target iOS 15.
+What differs from the other builds is in `src/`: `main.cpp` includes `SDL_main.h` (SDL's app delegate calls `main()` once the app has launched) and stops drawing while the app is in the background, since iOS ends an app that touches the GPU there; `Storage.cpp` writes the two records to the app's Documents folder; `Game.cpp` has no Q-to-quit, as an iOS app is not meant to quit itself.
 
 ## On the Mac
 
 Prerequisites, all free:
 
-1. **Xcode** from the App Store (about 10 GB). Open it once so it installs its command-line tools and the iOS Simulator, and accept the licence.
-2. **Homebrew** (https://brew.sh) so the script can `brew install xcodegen`, the tool that writes the Xcode project from `project.yml`. Or install XcodeGen yourself and skip Homebrew.
-3. This repo: `git clone https://github.com/Flinterpop/River-Flyer.git` then `cd River-Flyer/ios`.
+1. **Xcode** from the App Store (about 10 GB). Open it once so it installs its command-line tools and an iOS Simulator, and accept the licence.
+2. **CMake** 3.25 or newer: `brew install cmake`, or with no Homebrew `pip3 install --user cmake` (the script finds either).
+3. This repo: `git clone https://github.com/Flinterpop/River-Flyer.git` then `cd River-Flyer`.
 
-Then:
-
-```bash
-./make-ios.sh              # simulator build: proves the project compiles; needs no Apple account
-./make-ios.sh --open       # the same, then opens RiverFlyer.xcodeproj in Xcode
-```
-
-To put it on an iPad, the app has to be signed. In Xcode: plug the iPad in (unlock it, tap Trust), pick it as the run destination at the top, open the project's **Signing & Capabilities** tab, tick *Automatically manage signing* and choose your Team, then press **Run**. Any Apple ID works as a team: a free account signs an app that runs for 7 days and must be re-installed after that; the $99/year developer account signs for a year and unlocks TestFlight, which is how the girls could install it on their own iPads without a cable.
-
-From the command line, once a team exists (Xcode > Settings > Accounts shows its 10-character id):
+Then, from the repo root or this folder:
 
 ```bash
-TEAM_ID=ABCDE12345 ./make-ios.sh --device --install
+./ios/make-ios.sh              # simulator build: proves everything compiles; needs no Apple account
+./ios/make-ios.sh --run        # the same, then installs and launches it on the booted simulator (boots an iPad if none is)
+./ios/make-ios.sh --open       # opens build-ios/scroller.xcodeproj in Xcode
 ```
 
-The first launch of a free-account build is blocked until the iPad trusts the developer: **Settings > General > VPN & Device Management**, tap the account, Trust.
+The first configure takes a few minutes (SDL's configure checks, and the two downloads); after that a rebuild is seconds. The simulator runs headless from the command line; Xcode's Simulator app (Device Hub in Xcode 27) shows its screen, and `xcrun simctl io booted screenshot x.png` grabs one. The simulator has **no sound**: its audio server hangs on the RemoteIO unit and then aborts the app, so simulator builds do not open an audio device (set `RAYLIB_SIMULATOR_AUDIO=1` in the app's environment to try, e.g. `SIMCTL_CHILD_RAYLIB_SIMULATOR_AUDIO=1 xcrun simctl launch ...`). It is also slow: Apple's software GL renderer draws the river at a few frames a second on the title screen, which says nothing about a real iPad.
 
-## What to check on the first run
+### On an iPad
 
-Nothing in this folder has been executed on a Mac. The Swift is small and the pattern (scheme handler serving a WebAssembly app from the bundle) is well travelled, but these are the places it could still go wrong:
+The app has to be signed with an Apple team. Any Apple ID works: a free account signs an app that runs for 7 days and must be re-installed after that; the $99/year developer account signs for a year and unlocks TestFlight, which is how the girls could install it on their own iPads without a cable. Xcode > Settings > Accounts shows the account and its 10-character team id.
 
-1. **Blank screen after the Play overlay.** The wasm did not load. Look at Xcode's console for `River Flyer: no such bundled file`: the `web` folder is missing from the bundle (in the project navigator it should be a blue folder reference, not a yellow group) or the three files were not copied in.
-2. **No sound.** The Play tap is the user gesture that unlocks audio. If it stays silent, the `mediaTypesRequiringUserActionForPlayback = []` line in `GameViewController.swift` is the thing to look at, and whether iPad silent mode is on.
-3. **Scores not kept between launches.** The game stores them in `localStorage`. WebKit keeps that for custom-scheme origins, but if a restart shows an empty table, say so: the fallback is to serve from `file://` with the WebKit preference `allowFileAccessFromFileURLs`.
-4. **Page scrolls or zooms under a finger.** The shell sets `touch-action: none` and the view disables scrolling and bounce; if a drag still moves the page, the scroll view settings in `viewDidLoad` are the place.
-5. **Rotation.** Portrait is enforced from both `Info.plist` and the view controller. On an iPad in landscape the app should turn the content to portrait rather than letterbox sideways.
+From Xcode: `./ios/make-ios.sh --open`, plug the iPad in (unlock it, tap Trust), pick it as the run destination at the top, select the `scroller` scheme, open the project's **Signing & Capabilities** tab, tick *Automatically manage signing* and choose your Team, then press **Run**. Note that CMake regenerates the project on every configure, so a team chosen in Xcode is forgotten by the next `make-ios.sh`; pass it in instead:
 
-If the simulator build fails inside `xcodegen` or `xcodebuild`, run the failing command by hand without the `grep` in the script to see the whole message, and send that back.
+```bash
+TEAM_ID=ABCDE12345 ./ios/make-ios.sh --device --install
+```
+
+This needs Xcode signed in to the account (it creates the provisioning profile). The first launch of a free-account build is blocked until the iPad trusts the developer: **Settings > General > VPN & Device Management**, tap the account, Trust.
+
+## What to check on the first run on a device
+
+The simulator build has been run (title screen, layout on an iPhone 17 and an iPad Pro 13", Retina scaling, storage folder). These have not, because they need a real device:
+
+1. **Sound.** The audio session is opened as Ambient (playback only, obeys the mute switch, mixes with other audio). If it stays silent, check the side switch / Control Centre mute first; then look in Xcode's console for `AUDIO:` lines.
+2. **Touch.** Drag to steer, FIRE / CHAFF / JAM buttons, taps in the menus, the on-screen keyboard for a pilot name. This is the same touch layer as Android and the browser, reached through SDL's finger events.
+3. **Leaving and returning.** Press Home or take a call mid-game: the game should pause and be there, paused, on return, with no crash (iOS kills an app that draws in the background; `main.cpp` stops drawing on `SDL_EVENT_WILL_ENTER_BACKGROUND`).
+4. **Scores kept between launches.** They live in the app's Documents folder; the Files app shows them under *On My iPad > River Flyer* if the check is wanted.
+5. **A paired gamepad.** Same buttons as on the Xbox.
+6. **Frame rate.** 60 fps is expected on any supported iPad; the game asks for vsync.
+
+If something is wrong, Xcode's console (View > Debug Area) shows raylib's log; the lines starting `INFO: DISPLAY:` give the screen and render sizes, which on a Retina device should differ by the scale factor.
 
 ## Updating
 
-When a new River Flyer version is released, `git pull` and run the script again: it picks up the new version number and downloads that release's browser build (or uses `../build-web` if it has been built on the Mac with Emscripten). Nothing else in this folder needs to change for a game update.
+When the game changes, `git pull` and run the script again: nothing in this folder depends on the version except through `../src/Config.h`, which it reads. To move to a newer raylib, update the tarball URL and hash in `../CMakeLists.txt` (both the web/Android block and the iOS block use the same one) and check that `raylib-sdl-ios.patch` still applies.
+
+## TestFlight / App Store
+
+The app is on TestFlight as `ca.rabidfox.riverflyer` (App Store Connect app
+id 6814993158). A distribution build:
+
+```sh
+cmake --preset ios -DRF_TEAM_ID=KU9VFDK3Z4 -DRF_BUILD=<n>     # n must beat the last upload
+xcodebuild -project build-ios/scroller.xcodeproj -scheme scroller -configuration Release \
+  -destination 'generic/platform=iOS' -archivePath /tmp/RiverFlyer.xcarchive \
+  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" \
+  PROVISIONING_PROFILE_SPECIFIER="RF AppStore ca.rabidfox.riverflyer" DEVELOPMENT_TEAM=KU9VFDK3Z4 archive
+xcodebuild -exportArchive -archivePath /tmp/RiverFlyer.xcarchive \
+  -exportOptionsPlist ios/ExportOptions.plist -exportPath /tmp/rf-export
+xcrun altool --upload-app -f "/tmp/rf-export/River Flyer.ipa" -t ios --apple-id 6814993158 \
+  --apiKey <key id> --apiIssuer <issuer id>
+```
+
+Notes learned the hard way:
+
+- `SKIP_INSTALL NO` and `INSTALL_PATH` on the iOS target (in `CMakeLists.txt`)
+  are what make `xcodebuild archive` produce a non-empty archive.
+- Apple rejects a binary whose `Info.plist` lacks purpose strings for APIs the
+  *libraries* reference — SDL touches camera and Bluetooth, miniaudio the
+  microphone — even though the game never asks for them. Those strings are in
+  `ios/Info.plist.in`.
+- `-DRF_BUILD=<n>` bumps `CFBundleVersion` without changing the game version,
+  which App Store Connect requires for a replacement upload.

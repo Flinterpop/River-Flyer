@@ -1,14 +1,22 @@
 // Vertical river scroller - raylib + C++20.
 //
-// Three hosts share this file. On the desktop main() owns the frame loop. In
+// Four hosts share this file. On the desktop main() owns the frame loop. In
 // the browser build (Emscripten) the browser owns it: emscripten_set_main_loop_arg
 // calls WebTick once per display refresh and never returns to main. On Android
 // raylib's android_main() calls main() on the activity's thread and the loop
-// is ours again; the activity ends when main returns.
+// is ours again; the activity ends when main returns. On iOS (RF_IOS, raylib
+// on its SDL backend) SDL_main.h renames main() to SDL_main(), which SDL's
+// UIKit app delegate calls once the app has launched; the loop is ours, but
+// it must not draw while the app is in the background (see OnAppEvent).
 #include <cassert>
 #include <cstring>
 
 #include "raylib.h"
+
+#if defined(RF_IOS)
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#endif
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
@@ -71,6 +79,25 @@ void WebTick(void* arg)
 {
     assert(arg != nullptr);
     Tick(*static_cast<Session*>(arg));
+}
+#endif
+
+#if defined(RF_IOS)
+// iOS ends an app that touches the GPU while it is in the background, and
+// SDL leaves the frame loop running through the transition. The watch runs
+// inside SDL's event pump (from EndDrawing), so a background frame is never
+// half drawn: the loop sees the flag before it starts the next one.
+bool inBackground = false;
+
+bool OnAppEvent(void*, SDL_Event* event)
+{
+    assert(event != nullptr);
+    switch (event->type) {
+        case SDL_EVENT_WILL_ENTER_BACKGROUND: inBackground = true;  break;
+        case SDL_EVENT_DID_ENTER_FOREGROUND:  inBackground = false; break;
+        default: break;
+    }
+    return true;
 }
 #endif
 
@@ -153,6 +180,16 @@ int main(int argc, char* argv[])
     touch::SetEnabled(true, false);
     HideSystemBars();
     InitWindow(0, 0, cfg::kTitle);   // 0 x 0: the whole display, so the canvas letterboxes itself
+#elif defined(RF_IOS)
+    (void)argc; (void)argv;
+    touch::SetEnabled(true, false);
+    SDL_SetHint(SDL_HINT_IOS_HIDE_HOME_INDICATOR, "2");   // dimmed; one swipe shows it, a second leaves the game
+    // The window is always the whole screen, so the size here is ignored;
+    // HIGHDPI draws at the display's native pixels rather than points, and
+    // UNDECORATED (SDL's borderless) is what hides the status bar.
+    SetConfigFlags(FLAG_WINDOW_HIGHDPI | FLAG_WINDOW_UNDECORATED | FLAG_VSYNC_HINT);
+    InitWindow(cfg::kScreenW, cfg::kScreenH, cfg::kTitle);
+    SDL_AddEventWatch(OnAppEvent, nullptr);
 #elif defined(__EMSCRIPTEN__)
     (void)argc; (void)argv;
     touch::SetEnabled(rf_has_touch() != 0, false);   // an iPad or phone in Safari gets the phone layout
@@ -178,7 +215,17 @@ int main(int argc, char* argv[])
     SetTargetFPS(cfg::kTargetFps);
     {
         Session session;   // scoped so it is destroyed before CloseWindow()
-        while (!WindowShouldClose() && !session.game.WantsQuit()) { Tick(session); }
+        while (!WindowShouldClose() && !session.game.WantsQuit()) {
+#if defined(RF_IOS)
+            if (inBackground) {
+                session.game.Pause();
+                SDL_PumpEvents();   // keeps the app responsive; the watch above sees the return
+                SDL_Delay(50);
+                continue;
+            }
+#endif
+            Tick(session);
+        }
     }
     CloseWindow();
 #endif

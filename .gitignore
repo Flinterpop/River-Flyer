@@ -1,8 +1,4 @@
 build/
 build-web/
 .vs/
-ios/RiverFlyer/web/
-ios/RiverFlyer/Info.plist
-ios/RiverFlyer.xcodeproj/
-ios/project.generated.yml
-ios/build/
+build-ios/

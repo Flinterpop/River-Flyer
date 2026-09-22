@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template for the app's Info.plist; CMake fills in the ${...} values from
+     the MACOSX_BUNDLE_* target properties (version comes from src/Config.h). -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>          <string>en</string>
+    <key>CFBundleExecutable</key>                 <string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
+    <key>CFBundleIdentifier</key>                 <string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
+    <key>CFBundleInfoDictionaryVersion</key>      <string>6.0</string>
+    <key>CFBundleName</key>                       <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
+    <key>CFBundleDisplayName</key>                <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
+    <key>CFBundlePackageType</key>                <string>APPL</string>
+    <key>CFBundleShortVersionString</key>         <string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+    <key>CFBundleVersion</key>                    <string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
+    <key>LSRequiresIPhoneOS</key>                 <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>River Flyer does not use the camera. This entry is required because the SDL game library it is built with references the camera API.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>River Flyer does not use Bluetooth itself. This entry is required because the SDL game library it is built with references Bluetooth for game controllers.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>River Flyer does not record audio. This entry is required because the audio library it is built with references the microphone API.</string>
+    <key>ITSAppUsesNonExemptEncryption</key>      <false/>
+    <!-- An (empty) launch screen is what tells iOS the app knows about modern
+         screen sizes; without it the game runs letterboxed on an iPhone. -->
+    <key>UILaunchScreen</key>                     <dict/>
+    <key>UIRequiresFullScreen</key>               <true/>
+    <key>UIStatusBarHidden</key>                  <true/>
+    <key>UIViewControllerBasedStatusBarAppearance</key> <true/>
+    <key>UIApplicationSupportsIndirectInputEvents</key> <true/>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array><string>arm64</string><string>opengles-3</string></array>
+    <!-- Portrait only: the river scrolls down a tall canvas. -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array><string>UIInterfaceOrientationPortrait</string></array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    </array>
+    <!-- GCSupportedGameControllers lets the Settings app list the pad layouts. -->
+    <key>GCSupportsControllerUserInteraction</key> <true/>
+</dict>
+</plist>

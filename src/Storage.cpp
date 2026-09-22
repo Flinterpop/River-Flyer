@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "raylib.h"
@@ -44,10 +45,20 @@ namespace {
 
 // Where the records live: the exe folder on the desktop (raylib's
 // GetApplicationDirectory() ends in a slash), the app's private internal
-// folder on Android (the only place a NativeActivity can write without asking).
+// folder on Android (the only place a NativeActivity can write without asking),
+// the app's Documents folder on iOS (the bundle is read-only; Documents is
+// kept across updates and backed up).
 const char* BaseDir()
 {
-#if defined(__ANDROID__)
+#if defined(RF_IOS)
+    static char dir[512] = {0};
+    const char* home = std::getenv("HOME");   // the app's sandbox container
+    assert(home != nullptr);
+    const int n = std::snprintf(dir, sizeof(dir), "%s/Documents/", home);
+    assert(n > 0 && n < static_cast<int>(sizeof(dir)));
+    (void)n;
+    return dir;
+#elif defined(__ANDROID__)
     static char dir[512] = {0};
     const android_app* app = GetAndroidApp();
     assert(app != nullptr && app->activity != nullptr);

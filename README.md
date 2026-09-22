@@ -7,7 +7,7 @@
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 19 Sep 2026*
+*Last updated: 20 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
@@ -36,7 +36,7 @@ Notes:
 - Renaming a pilot shows an on-screen keyboard: the d-pad or stick moves, A types, B erases, Y is a space, Start keeps the name and Back cancels. A real keyboard still types straight in.
 - Scores and pilot names are kept in that browser's local storage, so the Xbox has its own table separate from the PC's.
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
-- **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. A proper iPad app that installs with an icon is in [`ios/`](ios/README.md): it wraps this same browser build in a full-screen web view and has to be built on a Mac with Xcode (see that folder's README for the steps).
+- **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. There is also a native iPad / iPhone app, the same C++ game built for iOS (see [iOS build](#ios-build)); it has to be built on a Mac with Xcode and installed with a cable or TestFlight, since it is not on the App Store.
 
 ### On an Android phone or tablet
 
@@ -159,6 +159,23 @@ The first build downloads the Android Gradle Plugin (8.5, matched to the Gradle 
 - The version is read from `src/Config.h` by `android/app/build.gradle`, so the APK follows the same bump as the desktop and web builds. Release builds are signed with the debug key unless `android/keystore.properties` names a real one; that is enough for sideloading.
 - The launcher icon is drawn by `android/make_icon.py` (Pillow), in keeping with the rest of the game generating its own art.
 
+### iOS build
+
+Requirements: a Mac with Xcode (the App Store one; open it once) and CMake 3.25 or newer (`brew install cmake`, or without Homebrew `pip3 install --user cmake`). Then:
+
+```bash
+./ios/make-ios.sh --run                                   # simulator build, installed and launched on the booted simulator
+TEAM_ID=ABCDE12345 ./ios/make-ios.sh --device --install   # signed build on the plugged-in iPad
+```
+
+The first configure downloads raylib's source tarball and SDL 3.4; after that it is offline. [`ios/README.md`](ios/README.md) has the signing steps and what to check. Where it differs from the other builds:
+
+- raylib has no iOS platform, so the game runs on raylib's SDL backend over SDL3, which supplies the UIKit window, multi-touch, the Game Controller framework and app life-cycle events, drawing with OpenGL ES 3.0 (deprecated by Apple but present in the SDK; the swap for ANGLE, if it ever goes, is below the game). The root `CMakeLists.txt` under `IOS` fetches both and compiles raylib's sources directly, since raylib's own CMake hard-codes SDL2 for that backend, with the Xcode generator so the result is an ordinary Xcode project (`build-ios/scroller.xcodeproj`).
+- `ios/raylib-sdl-ios.patch` fixes four things in raylib 6.0 for iOS, each explained in its header: Retina scaling (the SDL backend never sets raylib's screen-scale matrix), the default framebuffer (EAGL has none; the view's is used), the audio session category (miniaudio's default opens the microphone path; a game wants Ambient), and the Simulator's audio server, which hangs and aborts the process, so simulator builds run silent.
+- `src/main.cpp` on iOS includes `SDL_main.h`, which renames `main()` so SDL's app delegate can call it once the app has launched, and watches the app events: iOS ends an app that touches the GPU in the background, so the loop skips frames (paused) until the app returns.
+- `src/Storage.*` writes the two records to the app's Documents folder; the bundle is read-only.
+- Scores, names and the icon behave as on Android: kept in the app's own storage, cleared by uninstalling; the icon is the same 1024 px image drawn by `android/make_icon.py`.
+
 ## Layout
 
 | File | Holds |
@@ -178,12 +195,12 @@ The first build downloads the Android Gradle Plugin (8.5, matched to the Gradle 
 | `src/Audio.*` | Sound bank synthesised at start-up: slurp, shoot, pop, crunch, whine, splash, brake, fanfare, thud, ding, launch, chaff, radar warning, and the music loop |
 | `src/HighScores.*` | Top-ten table with names, saved through `Storage` as `highscores.txt` |
 | `src/Profiles.*` | Pilot names for the title screen, saved through `Storage` as `profiles.txt` |
-| `src/Storage.*` | The two saved records: files beside the exe on the desktop, browser local storage on the web, the app's internal folder on Android |
+| `src/Storage.*` | The two saved records: files beside the exe on the desktop, browser local storage on the web, the app's internal folder on Android, its Documents folder on iOS |
 | `src/Canvas.*` | Off-screen 960 x 1000 render target, presented scaled and pillarboxed to the real window |
-| `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up |
+| `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up; on iOS it stops drawing while the app is in the background |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
 | `android/` | Gradle project for the APK: manifest (NativeActivity, portrait), `build.gradle` (drives the root CMake, version from `Config.h`), icon generator |
-| `ios/` | iPad / iPhone app: a `WKWebView` around the browser build, generated with XcodeGen and built on a Mac by `make-ios.sh`; version from `Config.h` |
+| `ios/` | iPad / iPhone app: `make-ios.sh` drives the root CMake for iOS (raylib on SDL3, OpenGL ES 3.0); the raylib patch, `Info.plist` template, GLES header shims and icon; version from `Config.h` |
 
 Notes:
 
@@ -192,7 +209,7 @@ Notes:
 
 ## Releasing
 
-Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK reads it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
+Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK and the iOS app read it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
 
 ```powershell
 git tag -a v0.6.2 -m "v0.6.2"
