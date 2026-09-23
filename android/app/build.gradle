@@ -24,13 +24,13 @@ if (keystoreFile.exists()) {
 
 android {
     namespace 'ca.rabidfox.riverflyer'
-    compileSdk 34
-    ndkVersion '27.3.13750724'
+    compileSdk 36
+    ndkVersion '28.2.13676358'
 
     defaultConfig {
         applicationId 'ca.rabidfox.riverflyer'
         minSdk 24
-        targetSdk 34
+        targetSdk 36
         versionCode rfMajor * 10000 + rfMinor * 100 + rfPatch
         versionName "${rfMajor}.${rfMinor}.${rfPatch}"
 

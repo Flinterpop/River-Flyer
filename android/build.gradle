@@ -1,4 +1,5 @@
-// Android Gradle Plugin 8.5 pairs with the Gradle 8.9 wrapper in this folder.
+// The Android Gradle Plugin and the wrapper's Gradle version go up together:
+// AGP 9.x needs Gradle 9.x. Bump both or neither.
 plugins {
-    id 'com.android.application' version '8.5.2' apply false
+    id 'com.android.application' version '9.4.1' apply false
 }

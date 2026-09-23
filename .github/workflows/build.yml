@@ -1,0 +1,75 @@
+# Build the game and run the headless tests on every push and pull request.
+# Windows builds the desktop exe with the same vcpkg triplet as a release and
+# runs ctest; Linux builds the browser target, which is the one whose toolchain
+# is not pinned in this repo and so the one most likely to drift. The Android
+# and iOS apps are not built here: they need an SDK and a signing identity, and
+# both are exercised by hand on a real device before a release.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: Windows desktop + tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The overlay port and the game both come from this tree; vcpkg itself
+      # ships with the runner image at VCPKG_INSTALLATION_ROOT.
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-overlays/**') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -A x64
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
+          -DVCPKG_OVERLAY_PORTS="${{ github.workspace }}/vcpkg-overlays"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # The generator's assertions stay live in this binary, so a bad strip
+      # aborts the run rather than passing quietly.
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scroller-windows
+          path: build/Release/scroller.exe
+
+  web:
+    name: Browser build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.9          # keep in step with RF_EMSDK_VERSION in CMakeLists.txt
+          actions-cache-folder: emsdk-cache
+
+      # Makefiles, not Ninja: one less thing that has to be on the image.
+      - name: Configure
+        run: emcmake cmake -S . -B build-web -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-web --parallel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: riverflyer-web
+          path: |
+            build-web/index.html
+            build-web/index.js
+            build-web/index.wasm

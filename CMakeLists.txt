@@ -16,6 +16,16 @@ if(EMSCRIPTEN OR ANDROID)
     # miniaudio (see vcpkg-overlays).
     include(FetchContent)
     if(EMSCRIPTEN)
+        # raylib is pinned by hash; the compiler that builds it is not, because
+        # it lives in C:/emsdk outside this tree. Say which version the released
+        # build was made with, so an emsdk upgrade is noticed rather than
+        # silently shipping a differently-built wasm. Warn, never fail: a newer
+        # toolchain usually works, and -DRF_EMSDK_VERSION=<v> retunes the check.
+        set(RF_EMSDK_VERSION "6.0.9" CACHE STRING "Emscripten version the web build is tested with")
+        if(NOT EMSCRIPTEN_VERSION VERSION_EQUAL RF_EMSDK_VERSION)
+            message(WARNING "Emscripten ${EMSCRIPTEN_VERSION} is not the tested ${RF_EMSDK_VERSION}. "
+                            "Test the page before releasing, then update RF_EMSDK_VERSION in CMakeLists.txt.")
+        endif()
         set(PLATFORM       "Web"    CACHE STRING "raylib platform" FORCE)
         set(OPENGL_VERSION "ES 3.0" CACHE STRING "raylib GL"       FORCE)   # WebGL2: mipmaps on the NPOT sprites
     else()

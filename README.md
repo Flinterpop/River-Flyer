@@ -1,9 +1,11 @@
 # River Flyer
 
-[![Release][release-badge]][release-latest] [![License: MIT][license-badge]][license]
+[![Release][release-badge]][release-latest] [![Build][build-badge]][build-runs] [![License: MIT][license-badge]][license]
 
 [release-badge]: https://img.shields.io/badge/release-v0.6.2-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
+[build-badge]: https://github.com/Flinterpop/River-Flyer/actions/workflows/build.yml/badge.svg
+[build-runs]: https://github.com/Flinterpop/River-Flyer/actions/workflows/build.yml
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
@@ -110,11 +112,11 @@ Requirements: the [Emscripten SDK](https://emscripten.org) installed and activat
 
 ```powershell
 git clone https://github.com/emscripten-core/emsdk C:\emsdk
-C:\emsdk\emsdk install latest
-C:\emsdk\emsdk activate latest
+C:\emsdk\emsdk install 6.0.9
+C:\emsdk\emsdk activate 6.0.9
 ```
 
-Nothing needs to be on `PATH`: the `web` preset points at the toolchain file directly and uses Visual Studio's bundled Ninja. vcpkg is not involved; the first configure downloads raylib 6.0's source from GitHub (the same tarball vcpkg uses, checked by hash) and builds it for the web with `PLATFORM=Web`, which also sidesteps both overlay-port problems above.
+Emscripten is the one toolchain this repo cannot pin by hash, because it lives outside the tree: the configure warns when `emcc` is not the tested 6.0.9 (`RF_EMSDK_VERSION` in `CMakeLists.txt`). A newer one usually works - test the page, then move the pin. Nothing needs to be on `PATH`: the `web` preset points at the toolchain file directly and uses Visual Studio's bundled Ninja. vcpkg is not involved; the first configure downloads raylib 6.0's source from GitHub (the same tarball vcpkg uses, checked by hash) and builds it for the web with `PLATFORM=Web`, which also sidesteps both overlay-port problems above.
 
 ```powershell
 cmake --preset web
@@ -134,10 +136,10 @@ The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB 
 
 ### Android build
 
-Requirements: a JDK 17 or newer, and an Android SDK with platform 34, NDK 27 and CMake 3.31 (the SDK's own CMake bundles the Ninja that Gradle's native build expects). From the SDK's `cmdline-tools`:
+Requirements: a JDK 17 or newer, and an Android SDK with platform 36, NDK 28 and CMake 3.31 (the SDK's own CMake bundles the Ninja that Gradle's native build expects). From the SDK's `cmdline-tools`:
 
 ```powershell
-sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;27.3.13750724" "cmake;3.31.6"
+sdkmanager "platforms;android-36" "build-tools;36.1.0" "ndk;28.2.13676358" "cmake;3.31.6"
 ```
 
 Tell Gradle where the SDK is with `android\local.properties` containing `sdk.dir=C:/Android/sdk` (forward slashes; the file is git-ignored), then:
@@ -149,7 +151,7 @@ cd android
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-The first build downloads the Android Gradle Plugin (8.5, matched to the Gradle 8.9 wrapper) and raylib's source tarball; after that it is offline. Where it differs from the other two builds:
+The first build downloads the Android Gradle Plugin (9.4.1, matched to the Gradle 9.7.1 wrapper - the two go up together or not at all) and raylib's source tarball; after that it is offline. Where it differs from the other two builds:
 
 - `android/` is a small Gradle project with no Java in it: the manifest declares `android.app.NativeActivity` with `android.app.lib_name = scroller`, and Gradle drives the same `CMakeLists.txt` as the desktop, which under `ANDROID` builds the game as `libscroller.so` against raylib compiled for `PLATFORM=Android`. raylib's `android_main()` calls the game's `main()`.
 - `src/Touch.*` is the touch layer: a floating stick and the FIRE / CHAFF / JAM / pause buttons, drawn in window space after the canvas so they land in the letterbox bars. It also turns taps into canvas coordinates for the panels. On the desktop `scroller.exe --touch` shows the same layout with the mouse as a finger, for trying it without a device.
@@ -185,6 +187,8 @@ cmake --build --preset debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
+GitHub Actions runs the same two things on every push to `main` and on pull requests (`.github/workflows/build.yml`): the Windows desktop build with `ctest`, and the browser build, whose toolchain is the unpinned one. The phone and tablet apps are not built there - they need an SDK and a signing identity, and both are tried on a real device before a release.
+
 The generator's own assertions are half of what the tests check, so `rf_tests` keeps `NDEBUG` undefined in Release as well — a Release run still traps a bad clamp. The shipped exe is unaffected and keeps its assertions off. Note what this does *not* cover: the v0.6.0 island-clamp crash depended on ARM fusing a multiply-add, and would not reproduce on x86 even unfixed. The tests catch a generator that is wrong everywhere, not one that is wrong only on one instruction set.
 
 ## Layout
@@ -211,6 +215,7 @@ The generator's own assertions are half of what the tests check, so `rf_tests` k
 | `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up; on iOS it stops drawing while the app is in the background |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
 | `tests/rf_tests.cpp` | Headless checks of the river generator, the score table and the pilot list; run with ctest |
+| `.github/workflows/build.yml` | CI: the Windows build plus ctest, and the browser build, on every push and pull request |
 | `android/` | Gradle project for the APK: manifest (NativeActivity, portrait), `build.gradle` (drives the root CMake, version from `Config.h`), icon generator |
 | `ios/` | iPad / iPhone app: `make-ios.sh` drives the root CMake for iOS (raylib on SDL3, OpenGL ES 3.0); the raylib patch, `Info.plist` template, GLES header shims and icon; version from `Config.h` |
 
