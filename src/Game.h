@@ -55,6 +55,9 @@ private:
     void UpdateWake(Pilot& p, float dt);
     bool UpdateFuel(Pilot& p, float dt);          // true when the tank has just run dry
     void CheckPilotCrash(Pilot& p);
+    // Applies damage; true when the hull has just given out (caller crashes it).
+    bool Damage(Pilot& p, float amount);
+    void UpdateDamageSmoke(Pilot& p, float dt);
     void BeginCrash(Pilot& p, Player::CrashStyle style);
     void FinishCrash(Pilot& p);
     void ResolveBulletHits();
@@ -75,6 +78,7 @@ private:
     void DrawHud() const;
     static void DrawHudText(const char* text, int x, int y, int size);
     void DrawFuelBar(const Pilot& p, int x, int y) const;
+    void DrawHealthBar(const Pilot& p, int x, int y) const;
     void DrawWarnings(const Pilot& p, int x, int y, bool rightAlign) const;
     void DrawLives(const Pilot& p, int x, int y, bool rightToLeft) const;
     void DrawTitle() const;

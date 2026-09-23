@@ -117,6 +117,31 @@ constexpr float kFuelRefillPerSec = 45.0f;
 constexpr int   kPointsPerKill    = 100;
 constexpr float kPointsPerPx      = 0.1f;                            // distance contribution to score
 
+// Health: a plane takes damage instead of dying outright. Reaching zero is
+// what loses a life. Scraping a bank or an island grinds the health down
+// while contact lasts; solid hits take a chunk at once.
+constexpr float kHealthMax          = 100.0f;
+constexpr float kBankDamagePerSec   = 32.0f;                         // shore / island scrape
+constexpr float kRockDamage         = 45.0f;                         // rock, boat, bridge
+constexpr float kShellDamage        = 30.0f;                         // island gun shell
+constexpr float kMissileDamage      = 55.0f;
+constexpr float kHealthPack         = 45.0f;                         // restored by a health pickup
+constexpr int   kHealthChance       = 4;                             // percent per new strip
+constexpr float kSmokeHealth        = 55.0f;                         // trail smoke below this
+constexpr float kSevereHealth       = 25.0f;                         // thicker, faster trail below this
+constexpr float kSmokeGapHealthy    = 0.20f;                         // seconds between puffs at kSmokeHealth
+constexpr float kSmokeGapSevere     = 0.07f;                         // ... and at zero
+constexpr float kScrapeSparkGap     = 0.05f;                         // seconds between spark bursts while scraping
+constexpr int   kSparksPerBurst     = 7;
+constexpr float kSparkSeconds       = 0.45f;
+constexpr float kSparkSpeed         = 200.0f;                        // px per second
+constexpr float kSparkR             = 3.2f;
+constexpr float kHurtFlashSeconds   = 0.25f;                         // HUD bar flash after a hit
+constexpr float kBounceX            = 44.0f;                         // sideways shove off a bank, px
+constexpr float kBounceY            = 10.0f;                         // and a nudge downstream
+constexpr int   kHealthBarW         = 200;
+constexpr int   kHealthBarH         = 10;
+
 // Lives: losing one resets the craft and grants a short blinking grace period.
 constexpr int   kLives            = 3;
 constexpr float kGraceSeconds     = 2.0f;
@@ -154,7 +179,7 @@ constexpr float kRollPuffGap   = 0.035f;
 constexpr float kRollPuffRise  = 6.0f;                               // px each puff lags behind the tail per step
 
 // Wake foam behind the plane.
-constexpr int   kMaxFoam        = 64;
+constexpr int   kMaxFoam        = 96;                                // wake, smoke and sparks share this pool
 constexpr float kFoamSeconds    = 0.9f;
 constexpr float kFoamSpawnGap   = 0.04f;                             // seconds between puff pairs
 constexpr float kFoamSpread     = 28.0f;                             // sideways drift, px per second

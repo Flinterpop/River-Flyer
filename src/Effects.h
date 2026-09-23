@@ -16,6 +16,8 @@ public:
     void Spawn(Vector2 centre, Style style);   // silently dropped if the pool is full
     void SpawnFoam(Vector2 pos, float vx);     // wake puff with sideways velocity
     void SpawnSmoke(Vector2 pos);              // grey exhaust puff, no drift
+    void SpawnDamageSmoke(Vector2 pos, float severity);  // dark trail from a damaged hull (0..1)
+    void SpawnSparks(Vector2 pos, float awayX); // damage sparks flying off the hull
     void Update(float dt);
     void Drift(float dy);                      // carry foam downstream with the river
     void Draw() const;                         // bursts (on top of everything)
@@ -29,11 +31,15 @@ private:
         bool    active;
     };
 
+    enum class Puff { Wake, Smoke, Spark, Damage };
+
     struct Foam {
         Vector2 pos;
-        float   vx;
+        Vector2 vel;
         float   age;
-        bool    smoke;   // grey, larger, longer
+        float   life;    // seconds this puff lives for
+        float   shade;   // damage smoke: 0 grey, 1 near-black
+        Puff    kind;
         bool    active;
     };
 

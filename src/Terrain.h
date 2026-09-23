@@ -21,8 +21,8 @@
 class Terrain {
 public:
     // Solid things, fuel, and pickups all live in one pool so collision is one query.
-    enum class Kind { Rock, Fuel, Boat, Gun, Sam, Bridge, Star, Shield, Spread, Life };
-    static bool IsPickup(Kind k) { return k == Kind::Star || k == Kind::Shield || k == Kind::Spread || k == Kind::Life; }
+    enum class Kind { Rock, Fuel, Boat, Gun, Sam, Bridge, Star, Shield, Spread, Life, Health };
+    static bool IsPickup(Kind k) { return k == Kind::Star || k == Kind::Shield || k == Kind::Spread || k == Kind::Life || k == Kind::Health; }
     static bool IsSolid(Kind k)  { return k == Kind::Rock || k == Kind::Boat || k == Kind::Gun || k == Kind::Sam || k == Kind::Bridge; }
 
     struct Strip {
@@ -76,6 +76,10 @@ public:
 
     // True if 'r' touches a river bank (outer bank or island).
     bool HitsBank(const Rectangle& r) const;
+
+    // Which way to shove a box that is touching a bank: -1 (left), +1 (right)
+    // or 0 if it is clear. Away from whichever edge it has crossed furthest.
+    float BankEscapeX(const Rectangle& r) const;
 
     // Index of the first active obstacle overlapping 'r', or -1.
     int FindObstacle(const Rectangle& r) const;

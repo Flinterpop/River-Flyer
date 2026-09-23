@@ -28,7 +28,7 @@ public:
     const Texture2D& Boat()   const { return boat_; }
     const Texture2D& Gun()    const { return gun_; }
     const Texture2D& Sam()    const { return sam_; }
-    const Texture2D& Pickup(int which) const;   // 0 star, 1 shield, 2 spread, 3 life
+    const Texture2D& Pickup(int which) const;   // 0 star, 1 shield, 2 spread, 3 life, 4 health
 
     // Draws the whole texture scaled into the given on-screen box.
     static void DrawInto(const Texture2D& tex, float x, float y, float w, float h, Color tint);
@@ -58,6 +58,6 @@ private:
     Texture2D boat_   {};
     Texture2D gun_    {};
     Texture2D sam_    {};
-    std::array<Texture2D, 4> pickups_ {};
+    std::array<Texture2D, 5> pickups_ {};
     std::array<Texture2D, cfg::kTreeVariants> trees_ {};
 };

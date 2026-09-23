@@ -11,7 +11,7 @@
 
 *Last updated: 22 Sep 2026*
 
-A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
+A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Clipping the shore or an island no longer ends the run: the hull takes damage, throws sparks and bounces the plane back into the channel, and a badly damaged plane trails smoke — fly over a health pack to patch it up. Three planes per game; lose one and the next arrives with a full tank, a full hull and a couple of seconds of grace.
 
 <img width="965" height="1050" alt="image" src="https://github.com/user-attachments/assets/159c47e1-06fc-4ee0-aa22-df71264ec00c" />
 

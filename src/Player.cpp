@@ -258,6 +258,19 @@ Rectangle Player::Bounds() const
                       cfg::kPlayerW - 2.0f * inset, cfg::kPlayerH - 2.0f * inset};
 }
 
+void Player::Bounce(float dirX)
+{
+    assert(!Crashing());
+    pos_.x += dirX * cfg::kBounceX;
+    pos_.y += cfg::kBounceY;                 // knocked back downstream a little
+    const float maxX = static_cast<float>(cfg::kScreenW) - cfg::kPlayerW;
+    const float maxY = static_cast<float>(cfg::kScreenH) - cfg::kPlayerH - cfg::kPlayerBottomMargin;
+    if (pos_.x < 0.0f)  { pos_.x = 0.0f; }
+    if (pos_.x > maxX)  { pos_.x = maxX; }
+    if (pos_.y < 0.0f)  { pos_.y = 0.0f; }
+    if (pos_.y > maxY)  { pos_.y = maxY; }
+}
+
 Vector2 Player::Muzzle() const
 {
     assert(!Crashing());

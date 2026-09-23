@@ -14,6 +14,7 @@ struct Pilot {
     std::array<char, cfg::kNameMax + 1> name {};
 
     int   lives        {0};
+    float health       {0.0f};    // hull integrity, 0 .. kHealthMax
     float fuel         {0.0f};
     float grace        {0.0f};    // seconds of invulnerability left after a respawn
     float fireCooldown {0.0f};
@@ -25,6 +26,9 @@ struct Pilot {
     int   chaff        {0};       // chaff bundles left
     bool  jamming      {false};   // jam key held this frame
     float rwrTimer     {0.0f};    // seconds until the next warning beep
+    float scrapeTimer  {0.0f};    // seconds until the next spark burst while scraping
+    float smokeTimer   {0.0f};    // seconds until the next damage-smoke puff
+    float hurtFlash    {0.0f};    // seconds of red HUD flash after taking a hit
 
     bool Active() const { return !out; }
     bool Flying() const { return !out && !plane.Crashing(); }

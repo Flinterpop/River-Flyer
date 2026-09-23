@@ -20,6 +20,10 @@ public:
     // Where bullets leave the craft (nose, top centre).
     Vector2 Muzzle() const;
 
+    // Push the craft sideways and downstream after a bank scrape, so it
+    // bounces clear instead of grinding along the shore.
+    void Bounce(float dirX);
+
     // Down key held this frame (drag chute out).
     bool Braking() const { return braking_; }
 

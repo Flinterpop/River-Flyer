@@ -74,6 +74,7 @@ Audio::Audio()
     bank_[static_cast<size_t>(Sfx::Shoot)]  = GenShoot();
     bank_[static_cast<size_t>(Sfx::Pop)]    = GenPop();
     bank_[static_cast<size_t>(Sfx::Crunch)] = GenCrunch();
+    bank_[static_cast<size_t>(Sfx::Scrape)] = GenScrape();
     bank_[static_cast<size_t>(Sfx::Whine)]  = GenWhine();
     bank_[static_cast<size_t>(Sfx::Splash)] = GenSplash();
     bank_[static_cast<size_t>(Sfx::Brake)]  = GenBrake();
@@ -161,6 +162,25 @@ Sound Audio::GenPop()
     for (int i = 0; i < frames; ++i) {
         const float u = TimeOf(i) / dur;
         g_scratch[static_cast<size_t>(i)] = Noise() * std::exp(-6.0f * u) * 0.5f;
+    }
+    return Commit(frames);
+}
+
+// Scrape: metal grinding along rock — band-passed noise with a ringing edge.
+// Short, so Sustain() can retrigger it while contact lasts.
+Sound Audio::GenScrape()
+{
+    const float dur    = 0.28f;
+    const int   frames = FramesFor(dur);
+    float bp = 0.0f, prev = 0.0f;
+    for (int i = 0; i < frames; ++i) {
+        const float t = TimeOf(i);
+        const float u = t / dur;
+        const float n = Noise();
+        bp   = 0.55f * bp + (n - prev);        // crude band-pass: grit without rumble
+        prev = n;
+        const float ring = std::sin(kTwoPi * 1850.0f * t) * 0.25f * std::exp(-9.0f * u);
+        g_scratch[static_cast<size_t>(i)] = (bp * (0.8f - 0.5f * u) + ring) * 0.55f;
     }
     return Commit(frames);
 }

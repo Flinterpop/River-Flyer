@@ -118,10 +118,12 @@ void Game::StartGame()
         p.map = (i == 0) ? input::PilotOne(!twoPlayer_) : input::PilotTwo();
         SetName(p.name, profiles_.At(profileIdx_[static_cast<size_t>(i)]));
         p.plane.Reset(twoPlayer_ ? ((i == 0) ? -50.0f : 50.0f) : 0.0f);
-        p.lives = Diff().lives;
-        p.fuel  = cfg::kFuelMax;
+        p.lives  = Diff().lives;
+        p.fuel   = cfg::kFuelMax;
+        p.health = cfg::kHealthMax;
         p.grace = 0.0f; p.fireCooldown = 0.0f; p.foamTimer = 0.0f; p.refuelPump = -1;
         p.shield = 0.0f; p.spread = 0.0f; p.chaff = cfg::kChaffPerPlane; p.jamming = false; p.rwrTimer = 0.0f;
+        p.scrapeTimer = 0.0f; p.smokeTimer = 0.0f; p.hurtFlash = 0.0f;
         assert(!terrain_.HitsBank(p.plane.Bounds()));   // must spawn in open water
     }
     state_ = State::Playing;
@@ -393,6 +395,8 @@ void Game::UpdatePilot(Pilot& p, float dt)
     p.plane.Update(dt, p.map);
     if (p.shield > 0.0f) { p.shield -= dt; }
     if (p.spread > 0.0f) { p.spread -= dt; }
+    if (p.hurtFlash > 0.0f) { p.hurtFlash -= dt; }
+    UpdateDamageSmoke(p, dt);
     UpdateCountermeasures(p, dt);
     UpdateWake(p, dt);
     UpdateFiring(p, dt);
@@ -592,11 +596,40 @@ void Game::Collect(Pilot& p, int obstacle)
         case Terrain::Kind::Shield: p.shield = cfg::kShieldSeconds; break;
         case Terrain::Kind::Spread: p.spread = cfg::kSpreadSeconds; break;
         case Terrain::Kind::Life:   if (p.lives < cfg::kMaxLives) { ++p.lives; } break;
+        case Terrain::Kind::Health:
+            p.health += cfg::kHealthPack;
+            if (p.health > cfg::kHealthMax) { p.health = cfg::kHealthMax; }
+            break;
         default: break;
     }
     effects_.Spawn(RectCentre(o.rect), Effects::Style::Plane);
     audio_.Play(Audio::Sfx::Ding);
     terrain_.RemoveObstacle(obstacle);
+}
+
+// Takes 'amount' off the hull. Returns true when that was the last of it, so
+// the caller can start the matching crash animation.
+bool Game::Damage(Pilot& p, float amount)
+{
+    assert(p.Flying() && amount > 0.0f);
+    if (p.shield > 0.0f) { return false; }          // the bubble eats it
+    p.health -= amount;
+    p.hurtFlash = cfg::kHurtFlashSeconds;
+    if (p.health <= 0.0f) { p.health = 0.0f; return true; }
+    return false;
+}
+
+// A damaged plane trails smoke; the worse the damage, the faster the puffs.
+void Game::UpdateDamageSmoke(Pilot& p, float dt)
+{
+    assert(p.Flying());
+    if (p.health >= cfg::kSmokeHealth) { p.smokeTimer = 0.0f; return; }
+    p.smokeTimer -= dt;
+    if (p.smokeTimer > 0.0f) { return; }
+    const float hurt = 1.0f - (p.health / cfg::kSmokeHealth);        // 0 at the threshold, 1 at death
+    p.smokeTimer = cfg::kSmokeGapHealthy + (cfg::kSmokeGapSevere - cfg::kSmokeGapHealthy) * hurt;
+    const Vector2 c = p.plane.Centre();
+    effects_.SpawnDamageSmoke(Vector2 {c.x + static_cast<float>(GetRandomValue(-4, 4)), c.y + cfg::kPlayerH * 0.45f}, hurt);
 }
 
 void Game::CheckPilotCrash(Pilot& p)
@@ -612,8 +645,9 @@ void Game::CheckPilotCrash(Pilot& p)
         if (shielded) { audio_.Play(Audio::Sfx::Pop); }
         else {
             audio_.Play(Audio::Sfx::Crunch);
-            BeginCrash(p, Player::CrashStyle::Roll);
-            return;
+            effects_.SpawnSparks(p.plane.Centre(), 1.0f);
+            effects_.SpawnSparks(p.plane.Centre(), -1.0f);
+            if (Damage(p, cfg::kMissileDamage)) { BeginCrash(p, Player::CrashStyle::Roll); return; }
         }
     }
     const int shell = shells_.Find(box);
@@ -623,8 +657,8 @@ void Game::CheckPilotCrash(Pilot& p)
         if (shielded) { audio_.Play(Audio::Sfx::Pop); }
         else {
             audio_.Play(Audio::Sfx::Crunch);
-            BeginCrash(p, Player::CrashStyle::Roll);
-            return;
+            effects_.SpawnSparks(p.plane.Centre(), 1.0f);
+            if (Damage(p, cfg::kShellDamage)) { BeginCrash(p, Player::CrashStyle::Roll); return; }
         }
     }
     const int hit = terrain_.FindObstacle(box);
@@ -635,10 +669,26 @@ void Game::CheckPilotCrash(Pilot& p)
         terrain_.RemoveObstacle(hit);
         if (shielded) { audio_.Play(Audio::Sfx::Pop); return; }   // the shield takes it
         audio_.Play(Audio::Sfx::Crunch);
-        BeginCrash(p, Player::CrashStyle::Roll);
+        effects_.SpawnSparks(p.plane.Centre(), 1.0f);
+        effects_.SpawnSparks(p.plane.Centre(), -1.0f);
+        if (Damage(p, cfg::kRockDamage)) { BeginCrash(p, Player::CrashStyle::Roll); }
     } else if (terrain_.HitsBank(box)) {
-        audio_.Play(Audio::Sfx::Whine);
-        BeginCrash(p, Player::CrashStyle::Spiral);
+        // Scraping the shore or an island: grind the hull down while contact
+        // lasts, throw sparks off the side that touched, and bounce clear.
+        // A shield spares the hull but still bounces — land is never flyable.
+        const float away = terrain_.BankEscapeX(box);
+        p.scrapeTimer -= GetFrameTime();
+        if (p.scrapeTimer <= 0.0f) {
+            p.scrapeTimer = cfg::kScrapeSparkGap;
+            const Vector2 c = p.plane.Centre();
+            effects_.SpawnSparks(Vector2 {c.x - away * cfg::kPlayerW * 0.5f, c.y}, -away);
+        }
+        audio_.Sustain(shielded ? Audio::Sfx::Pop : Audio::Sfx::Scrape);
+        if (away != 0.0f) { p.plane.Bounce(away); }
+        if (Damage(p, cfg::kBankDamagePerSec * GetFrameTime())) {
+            audio_.Play(Audio::Sfx::Whine);
+            BeginCrash(p, Player::CrashStyle::Spiral);
+        }
     }
 }
 
@@ -667,8 +717,9 @@ void Game::FinishCrash(Pilot& p)
     // Fresh plane at the start position, full tank, untouchable for a moment.
     const int idx = static_cast<int>(&p - pilots_.data());
     p.plane.Reset(twoPlayer_ ? ((idx == 0) ? -50.0f : 50.0f) : 0.0f);
-    p.fuel  = cfg::kFuelMax;
-    p.grace = cfg::kGraceSeconds;
+    p.fuel   = cfg::kFuelMax;
+    p.health = cfg::kHealthMax;
+    p.grace  = cfg::kGraceSeconds;
     p.chaff = cfg::kChaffPerPlane;
     assert(p.Flying());
 }
@@ -849,17 +900,45 @@ void Game::DrawHud() const
     const Pilot& p1 = pilots_[0];
     DrawHudText(p1.name.data(), 10, 8, 20);
     DrawFuelBar(p1, 10, 36);
-    DrawWarnings(p1, 10, 104, false);
+    DrawHealthBar(p1, 10, 56);
+    DrawWarnings(p1, 10, 120, false);
     if (twoPlayer_) {
         const Pilot& p2 = pilots_[1];
-        DrawLives(p1, 10, 60, false);
-        DrawWarnings(p2, cfg::kScreenW - 10, 104, true);
+        DrawLives(p1, 10, 76, false);
+        DrawWarnings(p2, cfg::kScreenW - 10, 120, true);
         const int nameW = MeasureText(p2.name.data(), 20);
         DrawHudText(p2.name.data(), cfg::kScreenW - 10 - nameW, 8, 20);
         DrawFuelBar(p2, cfg::kScreenW - 10 - 50 - cfg::kFuelBarW, 36);
-        DrawLives(p2, cfg::kScreenW - 10, 60, true);
+        DrawHealthBar(p2, cfg::kScreenW - 10 - 50 - cfg::kHealthBarW, 56);
+        DrawLives(p2, cfg::kScreenW - 10, 76, true);
     } else {
         DrawLives(p1, cfg::kScreenW - 10, 8, true);
+    }
+}
+
+void Game::DrawHealthBar(const Pilot& p, int x, int y) const
+{
+    assert(p.health >= 0.0f && p.health <= cfg::kHealthMax);
+    const float frac = p.health / cfg::kHealthMax;
+    const int   fill = static_cast<int>(static_cast<float>(cfg::kHealthBarW) * frac);
+    // Green while sound, amber once it is trailing smoke, red when critical.
+    const Color c = (p.health <= cfg::kSevereHealth) ? Color {230, 60, 60, 255}
+                  : (p.health <= cfg::kSmokeHealth)  ? Color {235, 170, 50, 255}
+                                                     : Color {70, 205, 110, 255};
+    DrawHudText("HULL", x, y - 1, 14);
+    DrawRectangle(x + 50, y, cfg::kHealthBarW, cfg::kHealthBarH, Fade(BLACK, 0.3f));
+    DrawRectangle(x + 50, y, fill, cfg::kHealthBarH, c);
+    if (p.hurtFlash > 0.0f) {
+        // Brief white wash over the remaining hull, so the flash can't be
+        // mistaken for a full bar.
+        const float a = p.hurtFlash / cfg::kHurtFlashSeconds;
+        DrawRectangle(x + 50, y, fill, cfg::kHealthBarH, Fade(RAYWHITE, 0.5f * a));
+    }
+    if (p.health <= cfg::kSevereHealth) {
+        const float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(GetTime()) * 9.0f);
+        DrawRectangleLines(x + 50, y, cfg::kHealthBarW, cfg::kHealthBarH, Fade(Color {255, 90, 90, 255}, 0.4f + 0.6f * pulse));
+    } else {
+        DrawRectangleLines(x + 50, y, cfg::kHealthBarW, cfg::kHealthBarH, RAYWHITE);
     }
 }
 

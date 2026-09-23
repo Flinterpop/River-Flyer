@@ -14,6 +14,7 @@ public:
         Shoot,    // one bullet
         Pop,      // rock or depot destroyed by a bullet
         Crunch,   // plane hits a rock
+        Scrape,   // hull grinding along a bank or island
         Whine,    // plane spirals into the bank / out of fuel
         Splash,   // plane hits the water
         Brake,    // drag chute hiss
@@ -44,6 +45,7 @@ private:
     static Sound GenShoot();
     static Sound GenPop();
     static Sound GenCrunch();
+    static Sound GenScrape();
     static Sound GenWhine();
     static Sound GenSplash();
     static Sound GenBrake();

@@ -244,6 +244,8 @@ void Terrain::TrySpawnPickup(const Strip& strip)
     if (roll <= acc) { PlaceObstacle(strip, Kind::Spread); return; }
     acc += cfg::kLifeChance;
     if (roll <= acc) { PlaceObstacle(strip, Kind::Life);   return; }
+    acc += cfg::kHealthChance;
+    if (roll <= acc) { PlaceObstacle(strip, Kind::Health); return; }
     assert(acc <= 100);
 }
 
@@ -621,6 +623,28 @@ bool Terrain::HitsBank(const Rectangle& r) const
     return false;
 }
 
+float Terrain::BankEscapeX(const Rectangle& r) const
+{
+    assert(r.width > 0.0f);
+    // Look at the middle of the box: pick the channel it overlaps most and
+    // push away from the edge it has crossed.
+    std::array<Span, 2> spans {};
+    const int n = SpansAt(r.y + r.height * 0.5f, spans);
+    int   best     = -1;
+    float bestOver = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const Span& sp = spans[static_cast<size_t>(i)];
+        const float over = std::min(r.x + r.width, sp.right) - std::max(r.x, sp.left);
+        if (best < 0 || over > bestOver) { best = i; bestOver = over; }
+    }
+    if (best < 0) { return 0.0f; }
+    const Span& sp = spans[static_cast<size_t>(best)];
+    const float leftBite  = sp.left - r.x;                 // > 0 when past the left edge
+    const float rightBite = (r.x + r.width) - sp.right;    // > 0 when past the right edge
+    if (leftBite <= 0.0f && rightBite <= 0.0f) { return 0.0f; }
+    return (leftBite > rightBite) ? 1.0f : -1.0f;
+}
+
 // ============================================================================
 // Stage palette
 // ============================================================================
@@ -908,11 +932,11 @@ void Terrain::DrawObstacles(const Sprites& sprites) const
                 Sprites::DrawInto(sprites.Fuel(), o.rect.x, o.rect.y, o.rect.width, o.rect.height, WHITE);
                 DrawFuelLabel(o.rect);
                 break;
-            case Kind::Star: case Kind::Shield: case Kind::Spread: case Kind::Life: {
+            case Kind::Star: case Kind::Shield: case Kind::Spread: case Kind::Life: case Kind::Health: {
                 // Bob and glow so pickups read as "good".
                 const float bob = 2.0f * std::sin(static_cast<float>(GetTime()) * 4.0f + cx * 0.05f);
                 DrawCircleV(Vector2 {cx, cy + bob}, o.rect.width * 0.7f, Fade(RAYWHITE, 0.25f + 0.1f * std::sin(static_cast<float>(GetTime()) * 6.0f)));
-                Sprites::DrawInto(sprites.Pickup(o.kind == Kind::Star ? 0 : o.kind == Kind::Shield ? 1 : o.kind == Kind::Spread ? 2 : 3),
+                Sprites::DrawInto(sprites.Pickup(o.kind == Kind::Star ? 0 : o.kind == Kind::Shield ? 1 : o.kind == Kind::Spread ? 2 : o.kind == Kind::Life ? 3 : 4),
                                   o.rect.x, o.rect.y + bob, o.rect.width, o.rect.height, WHITE);
                 break;
             }

@@ -20,8 +20,10 @@ void Effects::Reset()
     for (Foam& f : foam_) {
         f.active = false;
         f.age    = 0.0f;
-        f.vx     = 0.0f;
-        f.smoke  = false;
+        f.life   = cfg::kFoamSeconds;
+        f.shade  = 0.0f;
+        f.vel    = Vector2 {0.0f, 0.0f};
+        f.kind   = Puff::Wake;
         f.pos    = Vector2 {0.0f, 0.0f};
     }
 }
@@ -31,7 +33,7 @@ void Effects::SpawnFoam(Vector2 pos, float vx)
     assert(pos.y > -50.0f && pos.y < static_cast<float>(cfg::kScreenH) + 50.0f);
     for (Foam& f : foam_) {
         if (f.active) { continue; }
-        f.pos = pos; f.vx = vx; f.age = 0.0f; f.smoke = false; f.active = true;
+        f.pos = pos; f.vel = Vector2 {vx, 0.0f}; f.age = 0.0f; f.life = cfg::kFoamSeconds; f.kind = Puff::Wake; f.active = true;
         return;
     }
 }
@@ -40,7 +42,7 @@ void Effects::SpawnSmoke(Vector2 pos)
 {
     for (Foam& f : foam_) {
         if (f.active) { continue; }
-        f.pos = pos; f.vx = 0.0f; f.age = 0.0f; f.smoke = true; f.active = true;
+        f.pos = pos; f.vel = Vector2 {0.0f, 0.0f}; f.age = 0.0f; f.life = cfg::kFoamSeconds; f.kind = Puff::Smoke; f.active = true;
         return;
     }
 }
@@ -53,14 +55,64 @@ void Effects::Drift(float dy)
     }
 }
 
+// Sparks fly off the side that touched, mostly sideways and up, and die fast.
+// Trail smoke from a damaged hull: darker and denser the worse it is.
+void Effects::SpawnDamageSmoke(Vector2 pos, float severity)
+{
+    assert(severity >= 0.0f && severity <= 1.0f);
+    for (Foam& f : foam_) {
+        if (f.active) { continue; }
+        f.pos    = pos;
+        f.vel    = Vector2 {static_cast<float>(GetRandomValue(-12, 12)), -10.0f};
+        f.age    = 0.0f;
+        f.life   = cfg::kFoamSeconds * (0.8f + 0.6f * severity);
+        f.shade  = severity;
+        f.kind   = Puff::Damage;
+        f.active = true;
+        return;
+    }
+}
+
+void Effects::SpawnSparks(Vector2 pos, float awayX)
+{
+    int spawned = 0;
+    for (Foam& f : foam_) {
+        if (spawned >= cfg::kSparksPerBurst) { return; }
+        if (f.active) { continue; }
+        const float spread = static_cast<float>(GetRandomValue(-45, 45)) * 0.01f;
+        const float speed  = cfg::kSparkSpeed * (0.5f + static_cast<float>(GetRandomValue(0, 100)) * 0.005f);
+        f.pos    = pos;
+        f.vel    = Vector2 {awayX * speed, (spread - 0.35f) * speed};
+        f.age    = 0.0f;
+        f.life   = cfg::kSparkSeconds;
+        f.kind   = Puff::Spark;
+        f.active = true;
+        ++spawned;
+    }
+}
+
 void Effects::DrawFoam() const
 {
     for (const Foam& f : foam_) {
         if (!f.active) { continue; }
-        const float t = f.age / cfg::kFoamSeconds;
+        const float t = f.age / f.life;
         assert(t >= 0.0f && t < 1.0f);
-        if (f.smoke) { DrawCircleV(f.pos, 3.0f + 9.0f * t, Fade(GRAY, 0.5f * (1.0f - t))); }
-        else         { DrawCircleV(f.pos, cfg::kFoamR * (0.6f + 0.8f * t), Fade(RAYWHITE, 0.55f * (1.0f - t))); }
+        switch (f.kind) {
+            case Puff::Smoke: DrawCircleV(f.pos, 3.0f + 9.0f * t, Fade(GRAY, 0.5f * (1.0f - t))); break;
+            case Puff::Damage: {
+                // Sooty grey-black, thickening as the plane gets closer to death.
+                const unsigned char v = static_cast<unsigned char>(110 - 70 * f.shade);
+                DrawCircleV(f.pos, 2.5f + 7.0f * t, Fade(Color {v, v, v, 255}, (0.35f + 0.35f * f.shade) * (1.0f - t)));
+                break;
+            }
+            case Puff::Spark: {
+                // White-hot at birth, cooling to orange as it falls away.
+                const Color hot = {255, static_cast<unsigned char>(235 - 120 * t), static_cast<unsigned char>(160 - 150 * t), 255};
+                DrawCircleV(f.pos, cfg::kSparkR * (1.0f - 0.5f * t), Fade(hot, 1.0f - t));
+                break;
+            }
+            default: DrawCircleV(f.pos, cfg::kFoamR * (0.6f + 0.8f * t), Fade(RAYWHITE, 0.55f * (1.0f - t))); break;
+        }
     }
 }
 
@@ -88,8 +140,10 @@ void Effects::Update(float dt)
     for (Foam& f : foam_) {
         if (!f.active) { continue; }
         f.age   += dt;
-        f.pos.x += f.vx * dt;
-        if (f.age >= cfg::kFoamSeconds || f.pos.y > static_cast<float>(cfg::kScreenH) + 10.0f) { f.active = false; }
+        f.pos.x += f.vel.x * dt;
+        f.pos.y += f.vel.y * dt;
+        if (f.kind == Puff::Spark) { f.vel.y += 420.0f * dt; }   // sparks arc back down
+        if (f.age >= f.life || f.pos.y > static_cast<float>(cfg::kScreenH) + 10.0f) { f.active = false; }
     }
 }
 

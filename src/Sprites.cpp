@@ -120,7 +120,7 @@ Sprites::Sprites()
     boat_   = GenBoat();
     gun_    = GenGun();
     sam_    = GenSam();
-    for (int i = 0; i < 4; ++i) { pickups_[static_cast<size_t>(i)] = GenPickup(i); }
+    for (int i = 0; i < 5; ++i) { pickups_[static_cast<size_t>(i)] = GenPickup(i); }
     assert(player_.id != 0 && rock_.id != 0 && fuel_.id != 0 && bullet_.id != 0);
     assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0 && gun_.id != 0);
 }
@@ -416,14 +416,14 @@ Texture2D Sprites::GenSam()
 
 const Texture2D& Sprites::Pickup(int which) const
 {
-    assert(which >= 0 && which < 4);
+    assert(which >= 0 && which < 5);
     return pickups_[static_cast<size_t>(which)];
 }
 
 // 0: gold star. 1: blue shield bubble. 2: three-way spread arrows. 3: extra plane.
 Texture2D Sprites::GenPickup(int which)
 {
-    assert(which >= 0 && which < 4);
+    assert(which >= 0 && which < 5);
     const int   n = static_cast<int>(cfg::kPickupSize) * S;   // 52
     const float c = static_cast<float>(n) * 0.5f;
     Image img = GenImageColor(n, n, BLANK);
@@ -453,6 +453,14 @@ Texture2D Sprites::GenPickup(int which)
             ImageDrawLineEx(&img, Vector2 {c, c + 8.0f}, tip, 3, MAROON);
             ImageDrawCircleV(&img, tip, 3, MAROON);
         }
+    } else if (which == 4) {
+        // Health pack: white first-aid box with a red cross.
+        ImageDrawRectangle(&img, 3, 8, n - 6, n - 16, Color {245, 245, 245, 255});
+        ImageDrawRectangleLines(&img, Rectangle {3.0f, 8.0f, static_cast<float>(n - 6), static_cast<float>(n - 16)}, 2, Color {180, 185, 195, 255});
+        const int arm = n / 5, half = n / 14;
+        ImageDrawRectangle(&img, static_cast<int>(c) - half, static_cast<int>(c) - arm, half * 2, arm * 2, Color {220, 50, 60, 255});
+        ImageDrawRectangle(&img, static_cast<int>(c) - arm, static_cast<int>(c) - half, arm * 2, half * 2, Color {220, 50, 60, 255});
+        ImageDrawRectangle(&img, 6, 11, n - 12, 3, Fade(RAYWHITE, 0.7f));   // highlight along the lid
     } else {
         ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 2.0f), Color {240, 240, 240, 230});
         ImageDrawCircleV(&img, Vector2 {c, c}, static_cast<int>(c - 6.0f), Color {255, 120, 140, 255});
