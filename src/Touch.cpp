@@ -193,12 +193,6 @@ bool    PausePressed(){ return pause; }
 bool    Tapped()      { return tapped; }
 Vector2 TapPos()      { return tapPos; }
 
-bool TappedIn(Rectangle r)
-{
-    assert(r.width >= 0.0f && r.height >= 0.0f);
-    return tapped && CheckCollisionPointRec(tapPos, r);
-}
-
 void Draw()
 {
     if (!enabled || !controls) { return; }

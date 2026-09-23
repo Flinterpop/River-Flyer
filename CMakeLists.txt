@@ -188,3 +188,30 @@ if(MSVC)
 else()
     target_compile_options(scroller PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
+
+# ---------------------------------------------------------------------------
+# Tests: headless checks of the river generator and the two saved records
+# (ctest, or run build/tests/<config>/rf_tests directly). Desktop hosts only -
+# the phone and browser builds have no test runner to speak of, and the game
+# sources they share are the ones being covered here.
+if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT IOS)
+    enable_testing()
+    set(RF_TEST_SOURCES ${RF_SOURCES})
+    list(REMOVE_ITEM RF_TEST_SOURCES src/main.cpp)   # the test binary brings its own main()
+    add_executable(rf_tests tests/rf_tests.cpp ${RF_TEST_SOURCES})
+    target_include_directories(rf_tests PRIVATE src)
+    target_link_libraries(rf_tests PRIVATE raylib glfw $<$<PLATFORM_ID:Windows>:winmm gdi32 opengl32 shell32>)
+    # The game's own assertions are half of what these tests check, so keep them
+    # in Release too: -U undefines NDEBUG after CMake's config flags have set it.
+    # MSVC says "D9025: overriding '/DNDEBUG' with '/UNDEBUG'" for this target;
+    # that is the intent. The shipped exe keeps NDEBUG and its assertions off.
+    target_compile_options(rf_tests PRIVATE $<IF:$<BOOL:${MSVC}>,/UNDEBUG,-UNDEBUG>)
+    if(MSVC)
+        target_compile_options(rf_tests PRIVATE /W4 /WX /permissive-)
+    else()
+        target_compile_options(rf_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+    endif()
+    # Its own folder: the records it writes must not land on the game's.
+    set_target_properties(rf_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    add_test(NAME rf_tests COMMAND rf_tests)
+endif()

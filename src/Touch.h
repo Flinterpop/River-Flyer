@@ -31,7 +31,6 @@ bool    PausePressed();         // edge-triggered
 // Menus: a finger landed this frame away from any button.
 bool    Tapped();
 Vector2 TapPos();               // in canvas coordinates; may lie outside the canvas
-bool    TappedIn(Rectangle canvasRect);
 
 // Window-space overlay: call after Canvas::Present(), inside BeginDrawing().
 void Draw();

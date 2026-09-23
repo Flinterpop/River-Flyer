@@ -81,8 +81,8 @@ def main() -> int:
         draw_icon(size).save(out)
         assert out.stat().st_size > 0
         print(f"wrote {out.relative_to(root.parent.parent.parent)} ({size}px)")
-    ios = Path(__file__).resolve().parent.parent / "ios" / "RiverFlyer" / "Assets.xcassets" / "AppIcon.appiconset"
-    ios.mkdir(parents=True, exist_ok=True)
+    ios = Path(__file__).resolve().parent.parent / "ios" / "Assets.xcassets" / "AppIcon.appiconset"
+    assert ios.is_dir(), f"missing {ios}"   # the catalog is committed; never create a second one
     ios_out = ios / "icon-1024.png"
     draw_icon(IOS_SIZE, rounded=False).save(ios_out)
     assert ios_out.stat().st_size > 0

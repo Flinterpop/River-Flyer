@@ -80,7 +80,7 @@ public:
     // Index of the first active obstacle overlapping 'r', or -1.
     int FindObstacle(const Rectangle& r) const;
 
-    static constexpr int ObstacleCapacity() { return cfg::kMaxObstacles; }
+    // Only valid for an index FindObstacle() returned: the pool is not iterable.
     const Obstacle& ObstacleAt(int i) const;
     void            RemoveObstacle(int i);
     bool            DamageObstacle(int i);   // one hit; true when it is destroyed

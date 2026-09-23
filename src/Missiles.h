@@ -33,7 +33,6 @@ public:
 
     // Distance from 'pos' to the nearest live missile chasing 'pilot', or -1 if none.
     float NearestTo(int pilot, Vector2 pos) const;
-    bool  AnyChasing() const;
 
 private:
     struct Missile {

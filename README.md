@@ -7,7 +7,7 @@
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 20 Sep 2026*
+*Last updated: 22 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Three planes per game; lose one and the next arrives with a full tank and a couple of seconds of grace.
 
@@ -176,6 +176,17 @@ The first configure downloads raylib's source tarball and SDL 3.4; after that it
 - `src/Storage.*` writes the two records to the app's Documents folder; the bundle is read-only.
 - Scores, names and the icon behave as on Android: kept in the app's own storage, cleared by uninstalling; the icon is the same 1024 px image drawn by `android/make_icon.py`.
 
+### Tests
+
+`tests/rf_tests.cpp` covers the parts of the game that are pure logic: the river generator across every difficulty and a spread of seeds, the high-score table, and the pilot list including their round trip through `Storage`. It opens no window, so it runs anywhere the desktop build runs. The desktop presets build it; the phone and browser presets skip it.
+
+```powershell
+cmake --build --preset debug
+ctest --test-dir build -C Debug --output-on-failure
+```
+
+The generator's own assertions are half of what the tests check, so `rf_tests` keeps `NDEBUG` undefined in Release as well — a Release run still traps a bad clamp. The shipped exe is unaffected and keeps its assertions off. Note what this does *not* cover: the v0.6.0 island-clamp crash depended on ARM fusing a multiply-add, and would not reproduce on x86 even unfixed. The tests catch a generator that is wrong everywhere, not one that is wrong only on one instruction set.
+
 ## Layout
 
 | File | Holds |
@@ -199,6 +210,7 @@ The first configure downloads raylib's source tarball and SDL 3.4; after that it
 | `src/Canvas.*` | Off-screen 960 x 1000 render target, presented scaled and pillarboxed to the real window |
 | `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up; on iOS it stops drawing while the app is in the background |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
+| `tests/rf_tests.cpp` | Headless checks of the river generator, the score table and the pilot list; run with ctest |
 | `android/` | Gradle project for the APK: manifest (NativeActivity, portrait), `build.gradle` (drives the root CMake, version from `Config.h`), icon generator |
 | `ios/` | iPad / iPhone app: `make-ios.sh` drives the root CMake for iOS (raylib on SDL3, OpenGL ES 3.0); the raylib patch, `Info.plist` template, GLES header shims and icon; version from `Config.h` |
 

@@ -157,8 +157,3 @@ float Missiles::NearestTo(int pilot, Vector2 pos) const
     return best;
 }
 
-bool Missiles::AnyChasing() const
-{
-    for (const Missile& m : pool_) { if (m.active && !m.onChaff) { return true; } }
-    return false;
-}
