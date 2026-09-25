@@ -95,3 +95,23 @@ Notes learned the hard way:
   `ios/Info.plist.in`.
 - `-DRF_BUILD=<n>` bumps `CFBundleVersion` without changing the game version,
   which App Store Connect requires for a replacement upload.
+
+## iPhone and iPad layout
+
+The game draws to an off-screen canvas that is always 960 px wide; its
+**height follows the display** (`src/Screen.h`), so an iPad fills the glass
+instead of showing a 4:3 letterbox and a tall phone gets more river than
+black bars. `screen::Fit()` picks the height at start-up from the window
+size, clamped to `[cfg::kScreenH, cfg::kScreenHMax]` (1000–1500); every
+fixed-size pool is built for the maximum, so nothing allocates at run time.
+
+| Device | Canvas |
+|---|---|
+| iPad Pro 13" (4:3) | 960 x 1280, exact fit |
+| iPad Pro 11" | 960 x 1392, exact fit |
+| iPhone 17 (19.5:9) | 960 x 1500 (clamped; small bars remain) |
+| Desktop window | 960 x 1000 as before |
+
+A taller canvas shows more river ahead, which makes the game slightly more
+forgiving on an iPad — the scroll speed is unchanged, there is just more
+warning. Raise `kScreenHMax` to let phones go taller still.

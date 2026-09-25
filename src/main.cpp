@@ -37,6 +37,7 @@ extern "C" struct android_app* GetAndroidApp(void);   // raylib exports it but d
 #include "Config.h"
 #include "Game.h"
 #include "Touch.h"
+#include "Screen.h"
 
 namespace {
 
@@ -202,6 +203,9 @@ int main(int argc, char* argv[])
 #endif
     SetExitKey(KEY_NULL);   // Esc pauses; Q on the title screen quits
     assert(IsWindowReady());
+    // Shape the canvas to the display: an iPad or a tall phone gets more river
+    // rather than black bars. Must happen before the Canvas and Game exist.
+    screen::Fit(GetScreenWidth(), GetScreenHeight());
 #if defined(__ANDROID__)
     if (!RecoverWindow()) { CloseWindow(); return 0; }
 #endif

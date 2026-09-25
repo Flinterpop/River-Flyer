@@ -104,6 +104,7 @@ endif()
 set(RF_SOURCES
     src/main.cpp
     src/Canvas.cpp
+    src/Screen.cpp
     src/Game.cpp
     src/Player.cpp
     src/Terrain.cpp

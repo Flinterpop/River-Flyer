@@ -1,4 +1,5 @@
 #include "Terrain.h"
+#include "Screen.h"
 
 #include <cassert>
 #include <cmath>
@@ -74,10 +75,10 @@ void Terrain::Reset(const Tuning& tuning)
     fishTimer_    = cfg::kFishInterval;
     phase_        = Phase::Single;
     phaseLeft_    = 0;
-    islandGap_    = cfg::kStripCount;   // the first screen is always a single channel
+    islandGap_    = screen::StripCount();   // the first screen is always a single channel
     islandTarget_ = 0.0f;
     gunSpacing_   = 0;
-    bridgeGap_    = cfg::kStripCount;
+    bridgeGap_    = screen::StripCount();
 
     for (Obstacle& o : obstacles_) {
         o.active = false;
@@ -95,7 +96,7 @@ void Terrain::Reset(const Tuning& tuning)
     // straight channel and the twists appear at the top.
     const float mid = static_cast<float>(cfg::kScreenW) * 0.5f;
     Strip seed {mid, cfg::kRiverMaxW * 0.7f, mid, 0.0f, nextSeed_};
-    for (int i = cfg::kStripCount - 1; i >= 0; --i) {
+    for (int i = screen::StripCount() - 1; i >= 0; --i) {
         strips_[static_cast<size_t>(i)] = seed;
         seed = MakeNextStrip(seed);
     }
@@ -413,7 +414,7 @@ void Terrain::TrySpawnCritter(const Strip& strip)
 void Terrain::TryFishJump()
 {
     // Somewhere in the visible water, at a random row.
-    const float y = static_cast<float>(GetRandomValue(120, cfg::kScreenH - 200));
+    const float y = static_cast<float>(GetRandomValue(120, screen::H() - 200));
     std::array<Span, 2> spans {};
     const int  n    = SpansAt(y, spans);
     const Span span = spans[static_cast<size_t>(GetRandomValue(0, n - 1))];
@@ -463,7 +464,7 @@ int Terrain::UpdateCritters(float dt, const std::array<Vector2, cfg::kMaxPilots>
                 }
             }
         }
-        if (b.pos.y > static_cast<float>(cfg::kScreenH) + 20.0f) { b.active = false; }
+        if (b.pos.y > screen::Bottom() + 20.0f) { b.active = false; }
     }
     assert(spotted >= 0 && spotted <= cfg::kMaxCritters);
     return spotted;
@@ -516,7 +517,7 @@ int Terrain::UpdateGuns(float dt, const std::array<Vector2, cfg::kMaxPilots>& ta
         const float dx   = target.x - c.x;
         const float dy   = target.y - c.y;
         const float dist = std::sqrt(dx * dx + dy * dy);
-        const bool onScreen = c.y > 30.0f && c.y < static_cast<float>(cfg::kScreenH) - 40.0f;
+        const bool onScreen = c.y > 30.0f && c.y < screen::Bottom() - 40.0f;
         if (!onScreen || dist > cfg::kGunRange || dist < 1.0f) { continue; }
 
         // Track the plane; the sprite's barrel points up, so 0 deg = up, clockwise positive.
@@ -553,7 +554,7 @@ void Terrain::Update(float dt)
     for (Obstacle& o : obstacles_) {
         if (!o.active) { continue; }
         o.rect.y += step;
-        if (o.rect.y > static_cast<float>(cfg::kScreenH)) { o.active = false; continue; }
+        if (o.rect.y > screen::Bottom()) { o.active = false; continue; }
         if (o.kind == Kind::Boat && o.rect.y > 0.0f) { MoveBoat(o, dt); }
     }
 }
@@ -564,7 +565,7 @@ void Terrain::Update(float dt)
 
 float Terrain::StripTopY(int index) const
 {
-    assert(index >= 0 && index < cfg::kStripCount);
+    assert(index >= 0 && index < screen::StripCount());
     // Strip 0 sits partly above the window; offset moves everything downward.
     return static_cast<float>((index - 1) * cfg::kStripH) + scrollOffset_;
 }
@@ -589,7 +590,7 @@ int Terrain::SpansAt(float y, std::array<Span, 2>& out) const
     // Strip whose top edge is at or above y, clamped so index+1 exists.
     int idx = static_cast<int>(std::floor((y - scrollOffset_) / static_cast<float>(cfg::kStripH))) + 1;
     if (idx < 0) { idx = 0; }
-    if (idx > cfg::kStripCount - 2) { idx = cfg::kStripCount - 2; }
+    if (idx > screen::StripCount() - 2) { idx = screen::StripCount() - 2; }
     const float t = Clamp((y - StripTopY(idx)) / static_cast<float>(cfg::kStripH), 0.0f, 1.0f);
 
     const Strip& a = strips_[static_cast<size_t>(idx)];
@@ -680,14 +681,14 @@ void Terrain::Draw(const Sprites& sprites) const
 {
     // Land everywhere first (textured, scrolling), then the river cut into it.
     const float scroll = -distance_;
-    const Rectangle grassSrc {0.0f, scroll, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kScreenH)};
+    const Rectangle grassSrc {0.0f, scroll, static_cast<float>(cfg::kScreenW), screen::Bottom()};
     DrawTexturePro(sprites.Grass(), grassSrc,
-                   Rectangle {0.0f, 0.0f, static_cast<float>(cfg::kScreenW), static_cast<float>(cfg::kScreenH)},
+                   Rectangle {0.0f, 0.0f, static_cast<float>(cfg::kScreenW), screen::Bottom()},
                    Vector2 {0.0f, 0.0f}, 0.0f, StageColor(&cfg::Stage::land));
     DrawWater(sprites);
     DrawShallows();
     DrawShore();
-    for (int i = 0; i < cfg::kStripCount; ++i) { DrawTrees(i, sprites); }
+    for (int i = 0; i < screen::StripCount(); ++i) { DrawTrees(i, sprites); }
     DrawCritters();
     DrawObstacles(sprites);
 }
@@ -699,7 +700,7 @@ void Terrain::DrawWater(const Sprites& sprites) const
     const float scroll = -distance_;
     const float h      = static_cast<float>(cfg::kSliceH);
     const Color tint   = StageColor(&cfg::Stage::water);
-    for (int y = -cfg::kSliceH; y < cfg::kScreenH; y += cfg::kSliceH) {
+    for (int y = -cfg::kSliceH; y < screen::H(); y += cfg::kSliceH) {
         const float fy = static_cast<float>(y);
         std::array<Span, 2> spans {};
         const int n = SpansAt(fy + h * 0.5f, spans);
@@ -716,7 +717,7 @@ void Terrain::DrawShallows() const
     // A greenish, slightly darker band of shallow water hugging every shoreline.
     const float h = static_cast<float>(cfg::kSliceH);
     const float w = cfg::kShallowW;
-    for (int y = -cfg::kSliceH; y < cfg::kScreenH; y += cfg::kSliceH) {
+    for (int y = -cfg::kSliceH; y < screen::H(); y += cfg::kSliceH) {
         const float fy = static_cast<float>(y);
         std::array<Span, 2> spans {};
         const int n = SpansAt(fy + h * 0.5f, spans);
@@ -742,7 +743,7 @@ void Terrain::DrawShoreSegment(Vector2 a, Vector2 b, float landSide, Color sand)
 void Terrain::DrawShore() const
 {
     const Color sand = StageColor(&cfg::Stage::sand);
-    for (int i = 0; i < cfg::kStripCount - 1; ++i) {
+    for (int i = 0; i < screen::StripCount() - 1; ++i) {
         const float y0 = StripTopY(i);
         const float y1 = StripTopY(i + 1);
         const Strip& a = strips_[static_cast<size_t>(i)];
@@ -773,7 +774,7 @@ void Terrain::DrawTreeReflection(float tx, float ty, float r, int side) const
 
 void Terrain::DrawTrees(int index, const Sprites& sprites) const
 {
-    assert(index >= 0 && index < cfg::kStripCount);
+    assert(index >= 0 && index < screen::StripCount());
     const Strip& s  = strips_[static_cast<size_t>(index)];
     const float  y0 = StripTopY(index);
     const Color  stageTint = StageColor(&cfg::Stage::tree);

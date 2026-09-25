@@ -1,4 +1,5 @@
 #include "Effects.h"
+#include "Screen.h"
 
 #include <cassert>
 #include <cmath>
@@ -30,7 +31,7 @@ void Effects::Reset()
 
 void Effects::SpawnFoam(Vector2 pos, float vx)
 {
-    assert(pos.y > -50.0f && pos.y < static_cast<float>(cfg::kScreenH) + 50.0f);
+    assert(pos.y > -50.0f && pos.y < screen::Bottom() + 50.0f);
     for (Foam& f : foam_) {
         if (f.active) { continue; }
         f.pos = pos; f.vel = Vector2 {vx, 0.0f}; f.age = 0.0f; f.life = cfg::kFoamSeconds; f.kind = Puff::Wake; f.active = true;
@@ -143,7 +144,7 @@ void Effects::Update(float dt)
         f.pos.x += f.vel.x * dt;
         f.pos.y += f.vel.y * dt;
         if (f.kind == Puff::Spark) { f.vel.y += 420.0f * dt; }   // sparks arc back down
-        if (f.age >= f.life || f.pos.y > static_cast<float>(cfg::kScreenH) + 10.0f) { f.active = false; }
+        if (f.age >= f.life || f.pos.y > screen::Bottom() + 10.0f) { f.active = false; }
     }
 }
 

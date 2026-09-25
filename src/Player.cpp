@@ -5,6 +5,7 @@
 
 #include "Config.h"
 #include "Sprites.h"
+#include "Screen.h"
 
 namespace {
 
@@ -25,7 +26,7 @@ void Player::Reset(float xOffset)
 {
     assert(xOffset > -200.0f && xOffset < 200.0f);
     pos_.x     = (static_cast<float>(cfg::kScreenW) - cfg::kPlayerW) * 0.5f + xOffset;
-    pos_.y     = cfg::kPlayerStartY;
+    pos_.y     = screen::Bottom() - cfg::kPlayerStartUp;
     thrusting_ = false;
     braking_   = false;
     chute_     = 0.0f;
@@ -50,10 +51,10 @@ void Player::Update(float dt, const InputMap& map)
     pos_.y += dir.y * cfg::kPlayerSpeedY * dt;
 
     pos_.x = Clamp(pos_.x, 0.0f, static_cast<float>(cfg::kScreenW) - cfg::kPlayerW);
-    pos_.y = Clamp(pos_.y, 0.0f, static_cast<float>(cfg::kScreenH) - cfg::kPlayerH - cfg::kPlayerBottomMargin);
+    pos_.y = Clamp(pos_.y, 0.0f, screen::Bottom() - cfg::kPlayerH - cfg::kPlayerBottomMargin);
 
     assert(pos_.x + cfg::kPlayerW <= static_cast<float>(cfg::kScreenW));
-    assert(pos_.y + cfg::kPlayerH <= static_cast<float>(cfg::kScreenH));
+    assert(pos_.y + cfg::kPlayerH <= screen::Bottom());
 }
 
 // ---- crash ----------------------------------------------------------------
@@ -264,7 +265,7 @@ void Player::Bounce(float dirX)
     pos_.x += dirX * cfg::kBounceX;
     pos_.y += cfg::kBounceY;                 // knocked back downstream a little
     const float maxX = static_cast<float>(cfg::kScreenW) - cfg::kPlayerW;
-    const float maxY = static_cast<float>(cfg::kScreenH) - cfg::kPlayerH - cfg::kPlayerBottomMargin;
+    const float maxY = screen::Bottom() - cfg::kPlayerH - cfg::kPlayerBottomMargin;
     if (pos_.x < 0.0f)  { pos_.x = 0.0f; }
     if (pos_.x > maxX)  { pos_.x = maxX; }
     if (pos_.y < 0.0f)  { pos_.y = 0.0f; }

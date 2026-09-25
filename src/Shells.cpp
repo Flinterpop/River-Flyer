@@ -1,4 +1,5 @@
 #include "Shells.h"
+#include "Screen.h"
 
 #include <cassert>
 
@@ -31,7 +32,7 @@ void Shells::Update(float dt)
         s.pos.y += s.vel.y * dt;
         s.age   += dt;
         const bool off = s.pos.x < -20.0f || s.pos.x > static_cast<float>(cfg::kScreenW) + 20.0f
-                      || s.pos.y < -20.0f || s.pos.y > static_cast<float>(cfg::kScreenH) + 20.0f;
+                      || s.pos.y < -20.0f || s.pos.y > screen::Bottom() + 20.0f;
         if (off || s.age > cfg::kShellSeconds) { s.active = false; }
     }
 }

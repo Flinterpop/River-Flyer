@@ -1,4 +1,5 @@
 #include "Missiles.h"
+#include "Screen.h"
 
 #include <cassert>
 #include <cmath>
@@ -84,7 +85,7 @@ void Missiles::Update(float dt, const std::array<Target, cfg::kMaxPilots>& targe
         // Reached the chaff: burst harmlessly. Timed out or off-screen: gone.
         const bool onTarget = m.onChaff && Length(Vector2 {m.chaff.x - m.pos.x, m.chaff.y - m.pos.y}) < 14.0f;
         const bool off = m.pos.x < -40.0f || m.pos.x > static_cast<float>(cfg::kScreenW) + 40.0f
-                      || m.pos.y < -40.0f || m.pos.y > static_cast<float>(cfg::kScreenH) + 40.0f;
+                      || m.pos.y < -40.0f || m.pos.y > screen::Bottom() + 40.0f;
         if (onTarget || m.age > cfg::kMissileSeconds || off) {
             effects.Spawn(m.pos, Effects::Style::Fuel);
             m.active = false;

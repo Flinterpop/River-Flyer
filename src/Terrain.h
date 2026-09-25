@@ -148,7 +148,7 @@ private:
     void DrawCritters() const;
     static void DrawFuelLabel(const Rectangle& depot);
 
-    std::array<Strip, cfg::kStripCount>          strips_ {};
+    std::array<Strip, cfg::kStripCountMax>       strips_ {};
     std::array<Obstacle, cfg::kMaxObstacles>     obstacles_ {};
     std::array<Beast, cfg::kMaxCritters>         critters_ {};
     float    scrollOffset_ {0.0f};   // 0 .. kStripH; sub-strip scroll position

@@ -11,7 +11,8 @@ constexpr const char* kVersion = "0.6.2";
 constexpr const char* kTitle   = "River Flyer";
 
 constexpr int   kScreenW      = 960;
-constexpr int   kScreenH      = 1000;
+constexpr int   kScreenH      = 1000;                                // design height; the canvas grows to the display (see Screen.h)
+constexpr int   kScreenHMax   = 1500;                                // tallest canvas the fixed-size pools are built for
 constexpr int   kTargetFps    = 60;
 
 // Rendering: sprites are generated at kSpriteScale x and filtered down;
@@ -26,7 +27,7 @@ constexpr float kTreeMaxR     = 12.0f;
 
 // Terrain: the river is stored as a stack of horizontal strips.
 constexpr int   kStripH       = 32;                                  // px per strip
-constexpr int   kStripCount   = kScreenH / kStripH + 2;              // +2 so the top/bottom edges are always covered
+constexpr int   kStripCountMax = kScreenHMax / kStripH + 2;          // +2 so the top/bottom edges are always covered
 constexpr float kScrollSpeed  = 100.0f;                              // base px per second, downward
 constexpr float kRiverMinW    = 200.0f;
 constexpr float kRiverMaxW    = 640.0f;
@@ -100,7 +101,7 @@ constexpr float kPlayerW      = 32.0f;
 constexpr float kPlayerH      = 40.0f;
 constexpr float kPlayerSpeedX = 300.0f;                              // px per second
 constexpr float kPlayerSpeedY = 220.0f;
-constexpr float kPlayerStartY = kScreenH - 140.0f;
+constexpr float kPlayerStartUp = 140.0f;                             // start this far above the bottom edge
 constexpr float kPlayerBottomMargin = 40.0f;                         // room below the tail for the flame / chute
 
 // Bullets.
