@@ -24,19 +24,26 @@ struct Point  { int id; Vector2 pos; };
 struct Frame  { Point pts[kMaxPoints]; int n; };
 struct Circle { Vector2 c; float r; };
 
+constexpr int kMaxPilots = 2;
+
 bool    enabled  = false;
 bool    mouseToo = false;   // desktop only: the mouse is finger 0
 bool    controls = false;
+int     players  = 1;
 Frame   cur {}, prev {};
 
-bool    stickOn = false;
-int     stickId = -1;
-Vector2 stickOrigin {0.0f, 0.0f};
-Vector2 stickPos    {0.0f, 0.0f};
-Vector2 move        {0.0f, 0.0f};
+// One set of controls per pilot: pilot 0 on the right, pilot 1 on the left.
+struct PilotTouch {
+    bool    stickOn {false};
+    int     stickId {-1};
+    Vector2 stickOrigin {0.0f, 0.0f};
+    Vector2 stickPos    {0.0f, 0.0f};
+    Vector2 move        {0.0f, 0.0f};
+    bool    fire {false}, jam {false};
+    bool    chaff {false}, chaffWas {false};
+};
+PilotTouch pilots[kMaxPilots] {};
 
-bool fire = false, jam = false;
-bool chaff = false, chaffWas = false;
 bool pause = false, pauseWas = false;
 
 bool    tapped = false;
@@ -50,10 +57,26 @@ float Unit()
     return ((w < h) ? w : h) / kUnitDiv;
 }
 
-Circle FireBtn()  { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 1.7f * u, static_cast<float>(GetScreenHeight()) - 1.7f * u}, kFireR * u}; }
-Circle JamBtn()   { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 1.7f * u, static_cast<float>(GetScreenHeight()) - 4.3f * u}, kSmallR * u}; }
-Circle ChaffBtn() { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 4.3f * u, static_cast<float>(GetScreenHeight()) - 1.5f * u}, kSmallR * u}; }
-Circle PauseBtn() { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 0.9f * u, 0.9f * u}, kPauseR * u}; }
+// Pilot 0's buttons hug the bottom-right corner; pilot 1's are mirrored into
+// the bottom-left so each player's thumbs stay in their own half.
+float SideX(int pilot, float fromEdge)
+{
+    const float w = static_cast<float>(GetScreenWidth());
+    return (pilot == 0) ? (w - fromEdge) : fromEdge;
+}
+
+Circle FireBtn(int pilot)  { const float u = Unit(); return Circle {{SideX(pilot, 1.7f * u), static_cast<float>(GetScreenHeight()) - 1.7f * u}, kFireR * u}; }
+Circle JamBtn(int pilot)   { const float u = Unit(); return Circle {{SideX(pilot, 1.7f * u), static_cast<float>(GetScreenHeight()) - 4.3f * u}, kSmallR * u}; }
+Circle ChaffBtn(int pilot) { const float u = Unit(); return Circle {{SideX(pilot, 4.3f * u), static_cast<float>(GetScreenHeight()) - 1.5f * u}, kSmallR * u}; }
+Circle PauseBtn()          { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 0.9f * u, 0.9f * u}, kPauseR * u}; }
+
+// Which pilot a finger at 'x' steers: the right half is pilot one, the left
+// half pilot two. With one player the whole window is theirs.
+int PilotAt(float x)
+{
+    if (players < 2) { return 0; }
+    return (x >= static_cast<float>(GetScreenWidth()) * 0.5f) ? 0 : 1;
+}
 
 bool Inside(Vector2 p, const Circle& c)
 {
@@ -63,7 +86,12 @@ bool Inside(Vector2 p, const Circle& c)
 
 bool OnAnyButton(Vector2 p)
 {
-    return controls && (Inside(p, FireBtn()) || Inside(p, JamBtn()) || Inside(p, ChaffBtn()) || Inside(p, PauseBtn()));
+    if (!controls) { return false; }
+    if (Inside(p, PauseBtn())) { return true; }
+    for (int i = 0; i < players; ++i) {
+        if (Inside(p, FireBtn(i)) || Inside(p, JamBtn(i)) || Inside(p, ChaffBtn(i))) { return true; }
+    }
+    return false;
 }
 
 bool AnyInside(const Frame& f, const Circle& c)
@@ -113,25 +141,25 @@ float Deflect(float d, float radius)
     return (v < -1.0f) ? -1.0f : ((v > 1.0f) ? 1.0f : v);
 }
 
-void UpdateStick()
+void UpdateStick(PilotTouch& p)
 {
-    if (stickOn && !Find(cur, stickId, stickPos)) { stickOn = false; }
-    if (!stickOn) { move = Vector2 {0.0f, 0.0f}; return; }
+    if (p.stickOn && !Find(cur, p.stickId, p.stickPos)) { p.stickOn = false; }
+    if (!p.stickOn) { p.move = Vector2 {0.0f, 0.0f}; return; }
 
     // The base trails the finger: past full deflection it is dragged along,
     // so reversing direction responds at once instead of after a long swipe back.
     const float r   = kStickRadius * Unit();
-    Vector2     d   = {stickPos.x - stickOrigin.x, stickPos.y - stickOrigin.y};
+    Vector2     d   = {p.stickPos.x - p.stickOrigin.x, p.stickPos.y - p.stickOrigin.y};
     const float len = std::sqrt(d.x * d.x + d.y * d.y);
     if (len > r) {
         const float k = 1.0f - r / len;
-        stickOrigin.x += d.x * k;
-        stickOrigin.y += d.y * k;
+        p.stickOrigin.x += d.x * k;
+        p.stickOrigin.y += d.y * k;
         d.x *= r / len;
         d.y *= r / len;
     }
-    move = Vector2 {Deflect(d.x, r), Deflect(d.y, r)};
-    assert(move.x >= -1.0f && move.x <= 1.0f && move.y >= -1.0f && move.y <= 1.0f);
+    p.move = Vector2 {Deflect(d.x, r), Deflect(d.y, r)};
+    assert(p.move.x >= -1.0f && p.move.x <= 1.0f && p.move.y >= -1.0f && p.move.y <= 1.0f);
 }
 
 void DrawButton(const Circle& c, const char* label, bool held, Color tint)
@@ -151,6 +179,16 @@ void SetEnabled(bool on, bool mouseIsFinger) { enabled = on; mouseToo = on && mo
 bool Enabled()           { return enabled; }
 void ShowControls(bool on) { controls = on; }
 
+void SetPlayers(int count)
+{
+    assert(count == 1 || count == 2);
+    if (count == players) { return; }
+    players = count;
+    for (PilotTouch& p : pilots) { p = PilotTouch {}; }   // drop sticks: the halves just moved
+}
+
+int Players() { return players; }
+
 void Update()
 {
     tapped = false;
@@ -165,30 +203,39 @@ void Update()
         Vector2 unused {};
         if (Find(prev, p.id, unused) || OnAnyButton(p.pos)) { continue; }
         if (controls) {
-            if (!stickOn) { stickOn = true; stickId = p.id; stickOrigin = p.pos; stickPos = p.pos; }
+            PilotTouch& pt = pilots[PilotAt(p.pos.x)];
+            if (!pt.stickOn) { pt.stickOn = true; pt.stickId = p.id; pt.stickOrigin = p.pos; pt.stickPos = p.pos; }
         } else if (!tapped) {
             tapped = true;
             tapPos = ToCanvas(p.pos);
         }
     }
-    UpdateStick();
+    for (int i = 0; i < kMaxPilots; ++i) { UpdateStick(pilots[i]); }
 
-    fire = controls && AnyInside(cur, FireBtn());
-    jam  = controls && AnyInside(cur, JamBtn());
-    const bool chaffNow = controls && AnyInside(cur, ChaffBtn());
-    chaff    = chaffNow && !chaffWas;
-    chaffWas = chaffNow;
+    for (int i = 0; i < kMaxPilots; ++i) {
+        PilotTouch& pt = pilots[i];
+        const bool live = controls && i < players;
+        pt.fire = live && AnyInside(cur, FireBtn(i));
+        pt.jam  = live && AnyInside(cur, JamBtn(i));
+        const bool chaffNow = live && AnyInside(cur, ChaffBtn(i));
+        pt.chaff    = chaffNow && !pt.chaffWas;
+        pt.chaffWas = chaffNow;
+    }
     const bool pauseNow = controls && AnyInside(cur, PauseBtn());
     pause    = pauseNow && !pauseWas;
     pauseWas = pauseNow;
-    assert(!(fire && !controls));
+    assert(!(pilots[0].fire && !controls));
 }
 
-Vector2 Move()        { return move; }
-bool    FireHeld()    { return fire; }
-bool    ChaffPressed(){ return chaff; }
-bool    JamHeld()     { return jam; }
-bool    PausePressed(){ return pause; }
+namespace {
+bool Valid(int pilot) { return pilot >= 0 && pilot < kMaxPilots && pilot < players; }
+}
+
+Vector2 Move(int pilot)         { return Valid(pilot) ? pilots[pilot].move : Vector2 {0.0f, 0.0f}; }
+bool    FireHeld(int pilot)     { return Valid(pilot) && pilots[pilot].fire; }
+bool    ChaffPressed(int pilot) { return Valid(pilot) && pilots[pilot].chaff; }
+bool    JamHeld(int pilot)      { return Valid(pilot) && pilots[pilot].jam; }
+bool    PausePressed()          { return pause; }
 
 bool    Tapped()      { return tapped; }
 Vector2 TapPos()      { return tapPos; }
@@ -197,14 +244,26 @@ void Draw()
 {
     if (!enabled || !controls) { return; }
     const float u = Unit();
-    if (stickOn) {
-        DrawCircleV(stickOrigin, kStickRadius * u, Fade(RAYWHITE, 0.12f));
-        DrawCircleLinesV(stickOrigin, kStickRadius * u, Fade(RAYWHITE, 0.5f));
-        DrawCircleV(Vector2 {stickOrigin.x + move.x * kStickRadius * u, stickOrigin.y + move.y * kStickRadius * u}, 0.35f * u, Fade(RAYWHITE, 0.6f));
+
+    // Two players: a faint line shows where one half ends and the other begins.
+    if (players > 1) {
+        const float x = static_cast<float>(GetScreenWidth()) * 0.5f;
+        DrawLineEx(Vector2 {x, 0.0f}, Vector2 {x, static_cast<float>(GetScreenHeight())}, 1.0f, Fade(RAYWHITE, 0.15f));
     }
-    DrawButton(FireBtn(),  "FIRE",  fire,     RED);
-    DrawButton(JamBtn(),   "JAM",   jam,      SKYBLUE);
-    DrawButton(ChaffBtn(), "CHAFF", chaffWas, GOLD);
+
+    for (int i = 0; i < players; ++i) {
+        const PilotTouch& pt = pilots[i];
+        // Pilot two's controls are tinted so the halves are easy to tell apart.
+        const Color tint = (i == 0) ? RAYWHITE : Color {200, 230, 255, 255};
+        if (pt.stickOn) {
+            DrawCircleV(pt.stickOrigin, kStickRadius * u, Fade(tint, 0.12f));
+            DrawCircleLinesV(pt.stickOrigin, kStickRadius * u, Fade(tint, 0.5f));
+            DrawCircleV(Vector2 {pt.stickOrigin.x + pt.move.x * kStickRadius * u, pt.stickOrigin.y + pt.move.y * kStickRadius * u}, 0.35f * u, Fade(tint, 0.6f));
+        }
+        DrawButton(FireBtn(i),  "FIRE",  pt.fire,     RED);
+        DrawButton(JamBtn(i),   "JAM",   pt.jam,      SKYBLUE);
+        DrawButton(ChaffBtn(i), "CHAFF", pt.chaffWas, GOLD);
+    }
 
     const Circle pb = PauseBtn();
     DrawCircleV(pb.c, pb.r, Fade(BLACK, pauseWas ? kHeldAlpha : kAlpha));

@@ -40,6 +40,14 @@ Notes:
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
 - **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. There is also a native iPad / iPhone app, the same C++ game built for iOS (see [iOS build](#ios-build)); it has to be built on a Mac with Xcode and installed with a cable or TestFlight, since it is not on the App Store.
 
+### Two players on one tablet
+
+Set **PLAYERS** to 2 on the title screen and the touch layer splits down the
+middle: pilot one steers in the right half with FIRE / CHAFF / JAM in the
+bottom-right corner, pilot two has the mirrored set on the left. Each half
+has its own floating stick, so two people can share an iPad. The planes carry
+a small **1** and **2** and start on their own player's side.
+
 ### On an Android phone or tablet
 
 Install `RiverFlyer-<version>-android.apk` from the [latest release][release-latest] (or build it, see [Android build](#android-build)): copy it to the device or open the link there, allow the install from that source when asked, and tap the icon. The whole game is in the app; nothing is downloaded and no permissions are requested.

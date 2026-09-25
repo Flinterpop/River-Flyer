@@ -119,7 +119,7 @@ void Game::StartGame()
         if (p.out) { continue; }
         p.map = (i == 0) ? input::PilotOne(!twoPlayer_) : input::PilotTwo();
         SetName(p.name, profiles_.At(profileIdx_[static_cast<size_t>(i)]));
-        p.plane.Reset(twoPlayer_ ? ((i == 0) ? -50.0f : 50.0f) : 0.0f);
+        p.plane.Reset(twoPlayer_ ? ((i == 0) ? 50.0f : -50.0f) : 0.0f);   // pilot one on the right, matching their half of the touch controls
         p.lives  = Diff().lives;
         p.fuel   = cfg::kFuelMax;
         p.health = cfg::kHealthMax;
@@ -128,6 +128,7 @@ void Game::StartGame()
         p.scrapeTimer = 0.0f; p.smokeTimer = 0.0f; p.hurtFlash = 0.0f;
         assert(!terrain_.HitsBank(p.plane.Bounds()));   // must spawn in open water
     }
+    touch::SetPlayers(PilotCount());   // two pilots split the screen
     state_ = State::Playing;
 }
 
@@ -718,7 +719,7 @@ void Game::FinishCrash(Pilot& p)
     }
     // Fresh plane at the start position, full tank, untouchable for a moment.
     const int idx = static_cast<int>(&p - pilots_.data());
-    p.plane.Reset(twoPlayer_ ? ((idx == 0) ? -50.0f : 50.0f) : 0.0f);
+    p.plane.Reset(twoPlayer_ ? ((idx == 0) ? 50.0f : -50.0f) : 0.0f);
     p.fuel   = cfg::kFuelMax;
     p.health = cfg::kHealthMax;
     p.grace  = cfg::kGraceSeconds;
@@ -861,6 +862,16 @@ void Game::DrawPowerUps(const Pilot& p) const
 {
     assert(p.Flying());
     const Vector2 c = p.plane.Centre();
+    if (twoPlayer_) {
+        // Whose plane is whose: "1" and "2" ride just above the canopy.
+        const int   idx   = static_cast<int>(&p - pilots_.data());
+        const char* label = (idx == 0) ? "1" : "2";
+        const int   size  = 14;
+        const int   x     = static_cast<int>(c.x) - MeasureText(label, size) / 2;
+        const int   y     = static_cast<int>(c.y) - static_cast<int>(cfg::kPlayerH * 0.5f) - size - 2;
+        DrawText(label, x + 1, y + 1, size, Fade(BLACK, 0.6f));
+        DrawText(label, x, y, size, (idx == 0) ? RAYWHITE : Color {170, 215, 255, 255});
+    }
     if (p.shield > 0.0f) {
         const float pulse = 0.85f + 0.15f * std::sin(static_cast<float>(GetTime()) * 8.0f);
         const float fade  = (p.shield < 1.5f) ? p.shield / 1.5f : 1.0f;   // flickers out
