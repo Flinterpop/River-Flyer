@@ -9,7 +9,7 @@
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [license]: LICENSE
 
-*Last updated: 22 Sep 2026*
+*Last updated: 25 Sep 2026*
 
 A vertical river scroller in C++20 and raylib, made for three players aged 7 to 12. Fly up a twisting river, dodge the rocks, shoot what is in the way, and top up at the fuel pumps before the tank runs dry. Clipping the shore or an island no longer ends the run: the hull takes damage, throws sparks and bounces the plane back into the channel, and a badly damaged plane trails smoke — fly over a health pack to patch it up. Three planes per game; lose one and the next arrives with a full tank, a full hull and a couple of seconds of grace.
 
@@ -128,7 +128,8 @@ The output is `build-web\index.html`, `index.js` and `index.wasm`, about 600 KB 
 
 - `web/shell.html` is the page. The game does not start until **Play** is pressed: that press is the user gesture browsers demand before a page may play sound or go fullscreen, so the audio device is created already unlocked. The shell needs `callMain` exported, and raylib's own `-sEXPORTED_RUNTIME_METHODS` would otherwise replace ours, so `CMakeLists.txt` patches raylib's flag rather than adding a second.
 - The browser owns the frame loop (`emscripten_set_main_loop_arg` in `src/main.cpp`) and runs at the display's refresh rate; the desktop build keeps its own 60 fps loop. Movement is time-based, so both play the same.
-- `src/Canvas.*` draws the fixed 960 x 1000 game into a texture and presents it scaled and pillarboxed to whatever the window is, so a 1080p TV shows the whole river. The desktop build goes through the same path at 1:1.
+- `src/Canvas.*` draws the game into a 960 px wide texture and presents it scaled and pillarboxed to whatever the window is, so a 1080p TV shows the whole river. The desktop build goes through the same path at 1:1.
+- `src/Screen.*` picks the canvas height once at start-up from the display's shape, clamped to 1000–1500: a desktop window and the browser stay at 1000, while an Android or iOS phone gets 1500 and an iPad fills the glass, so a tall screen shows more river instead of black bars. Every fixed-size pool is built for the 1500 maximum, so nothing allocates at run time.
 - `src/Storage.*` keeps the high scores and pilot names in the browser's local storage instead of files next to the exe.
 - raylib is built for WebGL2 (`OPENGL_VERSION "ES 3.0"`) so the non-power-of-two sprites keep their mipmaps; WebGL1 cannot mipmap them and the sprites shimmer.
 - `src/Touch.*` switches on when the page reports a touchscreen (`navigator.maxTouchPoints`), so an iPad, a phone or a touch laptop gets the phone layout while an Xbox or a desktop browser keeps the keyboard and gamepad panels. The shell sets `touch-action: none` on the canvas so fingers reach the game rather than scrolling or zooming the page, and carries the `apple-mobile-web-app-*` tags for the Home Screen. The mouse never stands in for a finger in the browser: browsers synthesise a click after every tap, which would count twice.
@@ -211,7 +212,8 @@ The generator's own assertions are half of what the tests check, so `rf_tests` k
 | `src/HighScores.*` | Top-ten table with names, saved through `Storage` as `highscores.txt` |
 | `src/Profiles.*` | Pilot names for the title screen, saved through `Storage` as `profiles.txt` |
 | `src/Storage.*` | The two saved records: files beside the exe on the desktop, browser local storage on the web, the app's internal folder on Android, its Documents folder on iOS |
-| `src/Canvas.*` | Off-screen 960 x 1000 render target, presented scaled and pillarboxed to the real window |
+| `src/Canvas.*` | Off-screen 960 px wide render target, presented scaled and pillarboxed to the real window |
+| `src/Screen.*` | Canvas height for this display (1000–1500), chosen at start-up |
 | `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up; on iOS it stops drawing while the app is in the background |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
 | `tests/rf_tests.cpp` | Headless checks of the river generator, the score table and the pilot list; run with ctest |

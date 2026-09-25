@@ -18,6 +18,7 @@
 #include "Config.h"
 #include "HighScores.h"
 #include "Profiles.h"
+#include "Screen.h"
 #include "Terrain.h"
 
 namespace {
@@ -43,7 +44,7 @@ Terrain::Tuning TuningFor(const cfg::Difficulty& d)
 // Where the plane starts a game: the generator must never open on a bank.
 Rectangle SpawnBox()
 {
-    return Rectangle {(static_cast<float>(cfg::kScreenW) - cfg::kPlayerW) * 0.5f, cfg::kPlayerStartY,
+    return Rectangle {(static_cast<float>(cfg::kScreenW) - cfg::kPlayerW) * 0.5f, screen::Bottom() - cfg::kPlayerStartUp,
                       cfg::kPlayerW, cfg::kPlayerH};
 }
 
@@ -55,7 +56,7 @@ int CheckObstacles(const Terrain& t)
 {
     constexpr float kProbe = 40.0f;   // the plane is 32 x 40, so nothing solid slips between probes
     int hits = 0;
-    for (float y = 0.0f; y < static_cast<float>(cfg::kScreenH); y += kProbe) {
+    for (float y = 0.0f; y < screen::Bottom(); y += kProbe) {
         for (float x = 0.0f; x < static_cast<float>(cfg::kScreenW); x += kProbe) {
             const int idx = t.FindObstacle(Rectangle {x, y, kProbe, kProbe});
             if (idx < 0) { continue; }
@@ -107,14 +108,36 @@ void RunRiver(int difficulty, unsigned int seed)
 // Every difficulty, several seeds: islands only appear on some of them, so one
 // river is not a test. A seed that crosses the island clamp bounds (the v0.6.0
 // crash on ARM) trips an assertion inside Terrain rather than a CHECK here.
+// Run at the desktop's design height and at the tallest canvas a phone or
+// tablet gets, so the strip pool is exercised at its bound.
 void TestTerrain()
 {
     constexpr int kSeeds = 8;
-    for (int d = 0; d < cfg::kDifficultyCount; ++d) {
-        for (int s = 0; s < kSeeds; ++s) {
-            RunRiver(d, static_cast<unsigned int>(1000 + d * kSeeds + s));
+    constexpr int kHeights[] = {cfg::kScreenH, cfg::kScreenHMax};
+    for (const int h : kHeights) {
+        screen::Fit(cfg::kScreenW, h);
+        CHECK(screen::H() == h);
+        CHECK(screen::StripCount() <= cfg::kStripCountMax);
+        for (int d = 0; d < cfg::kDifficultyCount; ++d) {
+            for (int s = 0; s < kSeeds; ++s) {
+                RunRiver(d, static_cast<unsigned int>(1000 + d * kSeeds + s));
+            }
         }
     }
+    screen::Fit(cfg::kScreenW, cfg::kScreenH);
+}
+
+// The canvas height follows the display's shape and stays inside its bounds.
+void TestScreenFit()
+{
+    screen::Fit(1920, 1080);                          // landscape monitor: never shorter than the design
+    CHECK(screen::H() == cfg::kScreenH);
+    screen::Fit(2048, 2732);                          // iPad Pro 13" (portrait)
+    CHECK(screen::H() == 1280);
+    screen::Fit(1080, 2400);                          // 20:9 Android phone: clamped
+    CHECK(screen::H() == cfg::kScreenHMax);
+    screen::Fit(cfg::kScreenW, cfg::kScreenH);
+    CHECK(screen::H() == cfg::kScreenH);
 }
 
 void TestHighScores()
@@ -200,6 +223,7 @@ int main()
 {
     SetTraceLogLevel(LOG_WARNING);   // no raylib banner, but keep storage warnings
 
+    TestScreenFit();
     TestTerrain();
     TestHighScores();
     TestProfiles();

@@ -2,9 +2,11 @@
 
 #include "raylib.h"
 
-// The game always draws at cfg::kScreenW x kScreenH. Canvas owns an off-screen
-// texture of that size and presents it scaled to whatever the real window is:
-// 1:1 on the desktop, pillarboxed on a landscape TV in the browser build.
+// The game draws at cfg::kScreenW x screen::H() (the design height on the
+// desktop, taller on a phone or tablet; see Screen.h). Canvas owns an
+// off-screen texture of that size and presents it scaled to whatever the real
+// window is: 1:1 on the desktop, pillarboxed on a landscape TV in the browser
+// build, filling or nearly filling a phone or tablet.
 // RAII around the render texture: construct after InitWindow(), destroy before
 // CloseWindow().
 class Canvas {

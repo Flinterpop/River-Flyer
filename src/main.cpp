@@ -203,12 +203,14 @@ int main(int argc, char* argv[])
 #endif
     SetExitKey(KEY_NULL);   // Esc pauses; Q on the title screen quits
     assert(IsWindowReady());
-    // Shape the canvas to the display: an iPad or a tall phone gets more river
-    // rather than black bars. Must happen before the Canvas and Game exist.
-    screen::Fit(GetScreenWidth(), GetScreenHeight());
 #if defined(__ANDROID__)
     if (!RecoverWindow()) { CloseWindow(); return 0; }
 #endif
+    // Shape the canvas to the display: an iPad or a tall phone gets more river
+    // rather than black bars; a desktop window keeps the design height. Must
+    // happen before the Canvas and Game exist, and on Android after the window
+    // is back, so the size is never read from a lost surface.
+    if (GetScreenWidth() > 0 && GetScreenHeight() > 0) { screen::Fit(GetScreenWidth(), GetScreenHeight()); }
 
 #if defined(__EMSCRIPTEN__)
     // Static: the browser loop unwinds main's stack without running destructors,
