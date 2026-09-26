@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "Touch.h"
 #include "Screen.h"
+#include "Haptics.h"
 
 namespace {
 
@@ -60,7 +61,7 @@ WideKey WideKeyAt(int col)
 
 // Panel geometry, shared by the drawing code and the touch hit-tests so a tap
 // lands exactly on what was drawn.
-constexpr int kTitlePanelW = 560, kTitlePanelH = 420;
+constexpr int kTitlePanelW = 560, kTitlePanelH = 468;
 constexpr int kTitlePx     = (cfg::kScreenW - kTitlePanelW) / 2;
 int       TitlePy()        { return (screen::H() - kTitlePanelH) / 2 + 40; }
 int       TitleRowY0()     { return TitlePy() + 30; }                 // first row; rows are kTitleRowH apart
@@ -68,7 +69,7 @@ constexpr int kTitleRowH   = 48;
 constexpr int kTitleLabelX = cfg::kScreenW / 2 - 200;
 constexpr int kTitleArrowW = 245;                                    // label + "<" zone, then value, then ">" zone
 constexpr int kTitleValueW = 200;
-Rectangle PlayBtn()        { return Rectangle {static_cast<float>(kTitlePx + 30), static_cast<float>(TitlePy() + 270), static_cast<float>(kTitlePanelW - 60), 56.0f}; }
+Rectangle PlayBtn()        { return Rectangle {static_cast<float>(kTitlePx + 30), static_cast<float>(TitlePy() + 318), static_cast<float>(kTitlePanelW - 60), 56.0f}; }
 
 constexpr int kNamePanelW  = kKeyCols * kKeyCell + 60, kNamePanelH = 390;
 constexpr int kNamePx      = (cfg::kScreenW - kNamePanelW) / 2;
@@ -120,7 +121,8 @@ void Game::StartGame()
         p.map = (i == 0) ? input::PilotOne(!twoPlayer_) : input::PilotTwo();
         SetName(p.name, profiles_.At(profileIdx_[static_cast<size_t>(i)]));
         p.plane.Reset(twoPlayer_ ? ((i == 0) ? 50.0f : -50.0f) : 0.0f);   // pilot one on the right, matching their half of the touch controls
-        p.lives  = Diff().lives;
+        p.assist = ((assistMask_ >> i) & 1) != 0;
+        p.lives  = Diff().lives + (p.assist ? cfg::kAssistLives : 0);
         p.fuel   = cfg::kFuelMax;
         p.health = cfg::kHealthMax;
         p.grace = 0.0f; p.fireCooldown = 0.0f; p.foamTimer = 0.0f; p.refuelPump = -1;
@@ -175,6 +177,7 @@ void Game::UpdateTitle(float dt)
             case Row::PilotOne:   profileIdx_[0] = (profileIdx_[0] + step + n) % n; break;
             case Row::PilotTwo:   profileIdx_[1] = (profileIdx_[1] + step + n) % n; break;
             case Row::Difficulty: difficulty_ = (difficulty_ + step + cfg::kDifficultyCount) % cfg::kDifficultyCount; break;
+            case Row::Assist:     CycleAssist(step); break;
             case Row::Count:      break;
         }
     }
@@ -215,6 +218,7 @@ void Game::TouchTitle(Vector2 p)
             case Row::PilotOne:   profileIdx_[0] = (profileIdx_[0] + step + n) % n; break;
             case Row::PilotTwo:   profileIdx_[1] = (profileIdx_[1] + step + n) % n; break;
             case Row::Difficulty: difficulty_ = (difficulty_ + step + cfg::kDifficultyCount) % cfg::kDifficultyCount; break;
+            case Row::Assist:     CycleAssist(step); break;
             case Row::Count:      break;
         }
         return;
@@ -445,7 +449,7 @@ void Game::UpdateFiring(Pilot& p, float dt)
 bool Game::UpdateFuel(Pilot& p, float dt)
 {
     assert(dt >= 0.0f && p.Flying());
-    p.fuel -= Diff().fuelBurn * (p.jamming ? cfg::kJamFuelMult : 1.0f) * dt;
+    p.fuel -= Diff().fuelBurn * (p.jamming ? cfg::kJamFuelMult : 1.0f) * (p.assist ? cfg::kAssistFuelBurn : 1.0f) * dt;
 
     // Flying over a depot refuels without destroying it.
     p.refuelPump = -1;
@@ -607,6 +611,7 @@ void Game::Collect(Pilot& p, int obstacle)
     }
     effects_.Spawn(RectCentre(o.rect), Effects::Style::Plane);
     audio_.Play(Audio::Sfx::Ding);
+    haptics::Play(haptics::Kind::Light);
     terrain_.RemoveObstacle(obstacle);
 }
 
@@ -616,8 +621,11 @@ bool Game::Damage(Pilot& p, float amount)
 {
     assert(p.Flying() && amount > 0.0f);
     if (p.shield > 0.0f) { return false; }          // the bubble eats it
+    if (p.assist) { amount *= cfg::kAssistDamage; }
     p.health -= amount;
     p.hurtFlash = cfg::kHurtFlashSeconds;
+    // A scrape arrives as a trickle every frame, so only a real bite buzzes.
+    if (amount >= cfg::kShellDamage) { haptics::Play(haptics::Kind::Heavy); }
     if (p.health <= 0.0f) { p.health = 0.0f; return true; }
     return false;
 }
@@ -682,6 +690,7 @@ void Game::CheckPilotCrash(Pilot& p)
         const float away = terrain_.BankEscapeX(box);
         p.scrapeTimer -= GetFrameTime();
         if (p.scrapeTimer <= 0.0f) {
+            if (p.scrapeTimer <= -cfg::kScrapeHapticGap) { haptics::Play(haptics::Kind::Medium); }
             p.scrapeTimer = cfg::kScrapeSparkGap;
             const Vector2 c = p.plane.Centre();
             effects_.SpawnSparks(Vector2 {c.x - away * cfg::kPlayerW * 0.5f, c.y}, -away);
@@ -701,6 +710,7 @@ void Game::BeginCrash(Pilot& p, Player::CrashStyle style)
     p.plane.BeginCrash(style);
     p.refuelPump = -1;
     shake_ = cfg::kShakeSeconds;
+    haptics::Play(haptics::Kind::Heavy);
     assert(p.plane.Crashing());
 }
 
@@ -912,6 +922,7 @@ void Game::DrawHud() const
 
     const Pilot& p1 = pilots_[0];
     DrawHudText(p1.name.data(), 10, 8, 20);
+    if (p1.assist) { DrawHudText("ASSIST", 10 + MeasureText(p1.name.data(), 20) + 10, 11, 14); }
     DrawFuelBar(p1, 10, 36);
     DrawHealthBar(p1, 10, 56);
     DrawWarnings(p1, 10, 120, false);
@@ -921,6 +932,7 @@ void Game::DrawHud() const
         DrawWarnings(p2, cfg::kScreenW - 10, 120, true);
         const int nameW = MeasureText(p2.name.data(), 20);
         DrawHudText(p2.name.data(), cfg::kScreenW - 10 - nameW, 8, 20);
+        if (p2.assist) { DrawHudText("ASSIST", cfg::kScreenW - 10 - nameW - MeasureText("ASSIST", 14) - 10, 11, 14); }
         DrawFuelBar(p2, cfg::kScreenW - 10 - 50 - cfg::kFuelBarW, 36);
         DrawHealthBar(p2, cfg::kScreenW - 10 - 50 - cfg::kHealthBarW, 56);
         DrawLives(p2, cfg::kScreenW - 10, 76, true);
@@ -1025,6 +1037,24 @@ void Game::DrawRefuelling(const Pilot& p) const
 
 // ---- panels -------------------------------------------------------------
 
+// OFF -> PILOT 1 -> PILOT 2 -> BOTH with two players; a plain toggle with one.
+void Game::CycleAssist(int step)
+{
+    const int states = twoPlayer_ ? 4 : 2;
+    assistMask_ = ((assistMask_ & (states - 1)) + step + states) % states;
+}
+
+const char* Game::AssistLabel() const
+{
+    if (!twoPlayer_) { return (assistMask_ & 1) ? "ON" : "OFF"; }
+    switch (assistMask_ & 3) {
+        case 1:  return "PILOT 1";
+        case 2:  return "PILOT 2";
+        case 3:  return "BOTH";
+        default: return "OFF";
+    }
+}
+
 void Game::DrawTitleRow(Row row, int y, const char* label, const char* value) const
 {
     assert(label != nullptr && value != nullptr);
@@ -1064,7 +1094,8 @@ void Game::DrawTitle() const
     DrawTitleRow(Row::PilotOne,   y, "PILOT 1",    profiles_.At(profileIdx_[0]));      y += kTitleRowH;
     if (twoPlayer_) { DrawTitleRow(Row::PilotTwo, y, "PILOT 2", profiles_.At(profileIdx_[1])); }
     y += kTitleRowH;
-    DrawTitleRow(Row::Difficulty, y, "DIFFICULTY", Diff().name);                       y += 60;
+    DrawTitleRow(Row::Difficulty, y, "DIFFICULTY", Diff().name);                       y += kTitleRowH;
+    DrawTitleRow(Row::Assist,     y, "ASSIST",     AssistLabel());                     y += 60;
 
     const int best1 = scores_.BestFor(profiles_.At(profileIdx_[0]));
     DrawText(TextFormat("%s's best: %06d", profiles_.At(profileIdx_[0]), best1), px + 30, y, 18, LIGHTGRAY); y += 40;

@@ -21,6 +21,7 @@ struct Pilot {
     float foamTimer    {0.0f};
     int   refuelPump   {-1};      // obstacle index being drawn from, or -1
     bool  out          {false};   // no planes left
+    bool  assist       {false};   // easier ride for a younger pilot
     float shield       {0.0f};    // seconds of shield bubble left
     float spread       {0.0f};    // seconds of three-way fire left
     int   chaff        {0};       // chaff bundles left

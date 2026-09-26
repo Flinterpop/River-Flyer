@@ -105,6 +105,7 @@ set(RF_SOURCES
     src/main.cpp
     src/Canvas.cpp
     src/Screen.cpp
+    src/Haptics.cpp
     src/Game.cpp
     src/Player.cpp
     src/Terrain.cpp
@@ -144,7 +145,7 @@ elseif(IOS)
     set(RF_BUILD "${RF_BUILD_DEFAULT}" CACHE STRING "CFBundleVersion for the iOS build")
     set(RF_TEAM_ID "" CACHE STRING "Apple developer team id for signing a device build (empty: simulator only)")
 
-    add_executable(scroller MACOSX_BUNDLE ${RF_SOURCES} ios/Assets.xcassets)
+    add_executable(scroller MACOSX_BUNDLE ${RF_SOURCES} src/Haptics.mm ios/Assets.xcassets)
     set_source_files_properties(ios/Assets.xcassets PROPERTIES MACOSX_PACKAGE_LOCATION Resources)   # Xcode compiles the icon into Assets.car
     set_target_properties(scroller PROPERTIES
         OUTPUT_NAME                                 "River Flyer"

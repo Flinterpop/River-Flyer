@@ -38,6 +38,7 @@ extern "C" struct android_app* GetAndroidApp(void);   // raylib exports it but d
 #include "Game.h"
 #include "Touch.h"
 #include "Screen.h"
+#include "Haptics.h"
 
 namespace {
 

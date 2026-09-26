@@ -29,7 +29,7 @@ public:
 
 private:
     // Title-screen rows.
-    enum class Row { Players, PilotOne, PilotTwo, Difficulty, Count };
+    enum class Row { Players, PilotOne, PilotTwo, Difficulty, Assist, Count };
 
     // ---- flow ----
     void StartGame();
@@ -71,6 +71,8 @@ private:
     int  Score() const;
     int  PilotCount() const { return twoPlayer_ ? 2 : 1; }
     const cfg::Difficulty& Diff() const { return cfg::kDifficulties[difficulty_]; }
+    void CycleAssist(int step);
+    const char* AssistLabel() const;   // OFF / ON / PILOT 1 / PILOT 2 / BOTH
 
     // ---- drawing ----
     void DrawWorld() const;
@@ -109,6 +111,7 @@ private:
     std::array<Pilot, cfg::kMaxPilots> pilots_ {};
     bool twoPlayer_  {false};
     int  difficulty_ {cfg::kDefaultDifficulty};
+    int  assistMask_ {0};          // bit per pilot: an easier ride for that seat
     std::array<int, cfg::kMaxPilots> profileIdx_ {0, 1};   // title-screen selection per pilot
     Row  row_        {Row::Players};
     float demoX_     {-100.0f};    // title-screen fly-by plane
