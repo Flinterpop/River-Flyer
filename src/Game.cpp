@@ -132,7 +132,7 @@ void Game::StartGame()
         SetName(p.name, profiles_.At(profileIdx_[static_cast<size_t>(i)]));
         p.plane.Reset(twoPlayer_ ? ((i == 0) ? 50.0f : -50.0f) : 0.0f);   // pilot one on the right, matching their half of the touch controls
         p.assist = ((assistMask_ >> i) & 1) != 0;
-        p.lives  = Diff().lives + (p.assist ? cfg::kAssistLives : 0);
+        p.lives  = StartingLives(p, Diff().lives);
         p.fuel   = cfg::kFuelMax;
         p.health = cfg::kHealthMax;
         p.grace = 0.0f; p.fireCooldown = 0.0f; p.foamTimer = 0.0f; p.refuelPump = -1;
@@ -461,7 +461,7 @@ void Game::UpdateFiring(Pilot& p, float dt)
 bool Game::UpdateFuel(Pilot& p, float dt)
 {
     assert(dt >= 0.0f && p.Flying());
-    p.fuel -= Diff().fuelBurn * (p.jamming ? cfg::kJamFuelMult : 1.0f) * (p.assist ? cfg::kAssistFuelBurn : 1.0f) * dt;
+    p.fuel -= Diff().fuelBurn * FuelBurnMult(p) * dt;
 
     // Flying over a depot refuels without destroying it.
     p.refuelPump = -1;
@@ -662,10 +662,7 @@ void Game::Collect(Pilot& p, int obstacle)
         case Terrain::Kind::Shield: p.shield = cfg::kShieldSeconds; break;
         case Terrain::Kind::Spread: p.spread = cfg::kSpreadSeconds; break;
         case Terrain::Kind::Life:   if (p.lives < cfg::kMaxLives) { ++p.lives; } break;
-        case Terrain::Kind::Health:
-            p.health += cfg::kHealthPack;
-            if (p.health > cfg::kHealthMax) { p.health = cfg::kHealthMax; }
-            break;
+        case Terrain::Kind::Health: HealHull(p, cfg::kHealthPack); break;
         default: break;
     }
     effects_.Spawn(RectCentre(o.rect), Effects::Style::Plane);
@@ -679,14 +676,12 @@ void Game::Collect(Pilot& p, int obstacle)
 bool Game::Damage(Pilot& p, float amount)
 {
     assert(p.Flying() && amount > 0.0f);
-    if (p.shield > 0.0f) { return false; }          // the bubble eats it
-    if (p.assist) { amount *= cfg::kAssistDamage; }
-    p.health -= amount;
+    const float taken = HullDamage(p, amount);
+    if (taken <= 0.0f) { return false; }            // the bubble ate it
     p.hurtFlash = cfg::kHurtFlashSeconds;
     // A scrape arrives as a trickle every frame, so only a real bite buzzes.
-    if (amount >= cfg::kShellDamage) { haptics::Play(haptics::Kind::Heavy); }
-    if (p.health <= 0.0f) { p.health = 0.0f; return true; }
-    return false;
+    if (taken >= cfg::kShellDamage) { haptics::Play(haptics::Kind::Heavy); }
+    return p.health <= 0.0f;
 }
 
 // A damaged plane trails smoke; the worse the damage, the faster the puffs.

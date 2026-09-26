@@ -1,5 +1,6 @@
 // Headless checks of the parts of the game that are pure logic: the river
-// generator, the high-score table and the pilot list. No window is opened, so
+// generator, the canvas height, the gunship boss, the hull / fuel / assist
+// rules, the high-score table and the pilot list. No window is opened, so
 // they run anywhere the desktop build runs, including a build server.
 //
 // The generator's own assertions are half the oracle here, so this target
@@ -15,8 +16,10 @@
 
 #include "raylib.h"
 
+#include "Boss.h"
 #include "Config.h"
 #include "HighScores.h"
+#include "Pilot.h"
 #include "Profiles.h"
 #include "Boss.h"
 #include "Screen.h"
@@ -140,6 +143,106 @@ void TestScreenFit()
     CHECK(screen::H() == cfg::kScreenHMax);
     screen::Fit(cfg::kScreenW, cfg::kScreenH);
     CHECK(screen::H() == cfg::kScreenH);
+}
+
+// Live shells in the pool, counted by killing each one Find() reports.
+int DrainShells(Shells& shells)
+{
+    const Rectangle everywhere {-1000.0f, -1000.0f, 4000.0f, 4000.0f};
+    int n = 0;
+    for (int i = 0; i < cfg::kMaxShells; ++i) {
+        const int idx = shells.Find(everywhere);
+        if (idx < 0) { break; }
+        shells.Kill(idx);
+        ++n;
+    }
+    return n;
+}
+
+// Steps the boss until it is on station. Returns false if it never arrives.
+bool BringOnStation(Boss& boss, Shells& shells)
+{
+    constexpr int   kMaxSteps = 60 * 10;
+    constexpr float kDt       = 1.0f / 60.0f;
+    for (int i = 0; i < kMaxSteps && !boss.Fighting(); ++i) {
+        boss.Update(kDt, nullptr, 0, shells);
+    }
+    return boss.Fighting();
+}
+
+// What TestBoss() below does not cover: the boss holds fire with nobody to
+// aim at, a salvo is exactly three shells, and a killed boss stays Active
+// (drawn as Dying, ignoring Update) until the caller clears it.
+void TestBossSalvo()
+{
+    constexpr float kDt = 1.0f / 60.0f;
+    Shells shells;
+    shells.Reset();
+    Boss boss;
+    boss.Reset();
+    boss.Spawn(0);
+    CHECK(BringOnStation(boss, shells));
+
+    const int reload = static_cast<int>(cfg::kBossReload / kDt) + 2;
+    for (int i = 0; i < reload; ++i) { boss.Update(kDt, nullptr, 0, shells); }
+    CHECK(DrainShells(shells) == 0);                 // reloaded, but nobody to shoot
+
+    const Vector2 plane {static_cast<float>(cfg::kScreenW) * 0.5f, 900.0f};
+    boss.Update(kDt, &plane, 1, shells);             // the held salvo goes at once
+    CHECK(DrainShells(shells) == 3);
+    for (int i = 0; i < reload; ++i) { boss.Update(kDt, &plane, 1, shells); }
+    CHECK(DrainShells(shells) == 3);                 // and one more per reload
+
+    const int hp = boss.MaxHp();
+    for (int i = 1; i < hp; ++i) { CHECK(!boss.Hit()); }
+    CHECK(boss.Hit());
+    CHECK(boss.Hp() == 0 && boss.Active() && !boss.Fighting());
+    CHECK(!boss.Hit());                              // no score for hitting a wreck
+    for (int i = 0; i < reload; ++i) { CHECK(!boss.Update(kDt, &plane, 1, shells)); }
+    CHECK(DrainShells(shells) == 0);                 // a dying boss does not fire
+    boss.Clear();
+    CHECK(!boss.Active());
+}
+
+// Hull damage, health packs, fuel burn and the assist handicap.
+void TestHullAndAssist()
+{
+    Pilot p;
+    p.health = cfg::kHealthMax;
+    CHECK(HullDamage(p, 30.0f) == 30.0f);
+    CHECK(p.health == cfg::kHealthMax - 30.0f);
+    HealHull(p, cfg::kHealthPack);
+    CHECK(p.health == cfg::kHealthMax);              // a pack never overfills
+    CHECK(HullDamage(p, cfg::kHealthMax * 3.0f) > 0.0f);
+    CHECK(p.health == 0.0f);                         // clamps rather than going negative
+
+    p.health = cfg::kHealthMax;
+    p.shield = 1.0f;
+    CHECK(HullDamage(p, 50.0f) == 0.0f);             // the shield eats it
+    CHECK(p.health == cfg::kHealthMax);
+    p.shield = 0.0f;
+
+    p.assist = true;
+    CHECK(HullDamage(p, 40.0f) == 40.0f * cfg::kAssistDamage);
+    CHECK(p.health == cfg::kHealthMax - 40.0f * cfg::kAssistDamage);
+
+    p.assist = false; p.jamming = false;
+    CHECK(FuelBurnMult(p) == 1.0f);
+    p.jamming = true;
+    CHECK(FuelBurnMult(p) == cfg::kJamFuelMult);
+    p.assist = true;
+    CHECK(FuelBurnMult(p) == cfg::kJamFuelMult * cfg::kAssistFuelBurn);
+    p.jamming = false;
+    CHECK(FuelBurnMult(p) == cfg::kAssistFuelBurn);
+    CHECK(FuelBurnMult(p) < 1.0f);                   // assist really is slower
+
+    for (int d = 0; d < cfg::kDifficultyCount; ++d) {
+        const int base = cfg::kDifficulties[d].lives;
+        p.assist = false;
+        CHECK(StartingLives(p, base) == base);
+        p.assist = true;
+        CHECK(StartingLives(p, base) == base + cfg::kAssistLives);
+    }
 }
 
 void TestHighScores()
@@ -277,6 +380,8 @@ int main()
 
     TestScreenFit();
     TestTerrain();
+    TestBossSalvo();
+    TestHullAndAssist();
     TestHighScores();
     TestProfiles();
     TestBoss();
