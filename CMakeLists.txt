@@ -110,6 +110,7 @@ set(RF_SOURCES
     src/Player.cpp
     src/Terrain.cpp
     src/Bullets.cpp
+    src/Boss.cpp
     src/Sprites.cpp
     src/Effects.cpp
     src/Audio.cpp

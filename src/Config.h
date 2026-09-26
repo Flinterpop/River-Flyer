@@ -312,6 +312,24 @@ constexpr float kBridgeH        = 22.0f;
 constexpr int   kBridgeHp       = 3;
 constexpr int   kPointsPerBridge = 500;
 
+// Stage boss: a gunship that arrives at the end of each stage, rakes the
+// river with shells for a while, and leaves (or goes down) either way.
+constexpr float kBossW            = 150.0f;
+constexpr float kBossH            = 90.0f;
+constexpr int   kBossHp           = 14;                              // bullet hits at stage 0
+constexpr int   kBossHpPerStage   = 6;
+constexpr float kBossSpeed        = 105.0f;                          // px per second across the river
+constexpr float kBossEntrySpeed   = 90.0f;
+constexpr float kBossStationY     = 70.0f;                           // where it settles, px from the top
+constexpr float kBossMargin       = 10.0f;
+constexpr float kBossReload       = 2.2f;                            // seconds between salvos
+constexpr float kBossShellSpeed   = 180.0f;
+constexpr float kBossSpread       = 0.22f;                           // radians between the three shells
+constexpr float kBossSeconds      = 26.0f;                           // patience before it climbs away
+constexpr float kBossFlashSeconds = 0.12f;
+constexpr int   kPointsPerBoss    = 2000;
+constexpr float kBossRamDamage    = 60.0f;                           // flying into it
+
 // Music: an 8-bar chiptune loop synthesised at start-up.
 constexpr float kMusicBpm     = 140.0f;
 constexpr int   kMusicEighths = 64;                                  // 8 bars of 8

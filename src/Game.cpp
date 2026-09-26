@@ -111,6 +111,9 @@ void Game::StartGame()
     shells_.Reset();
     missiles_.Reset();
     terrain_.Reset(TuningFor(Diff()));
+    boss_.Reset();
+    lastStage_ = terrain_.StageIndex();
+    bosses_ = 0;
     kills_ = 0; boatKills_ = 0; gunKills_ = 0; samKills_ = 0; missileKills_ = 0; stars_ = 0; bridges_ = 0; otters_ = 0;
     finalScore_ = 0; newRow_ = -1; shake_ = 0.0f;
 
@@ -381,6 +384,7 @@ void Game::UpdatePlaying(float dt)
     UpdateSams(dt);
     UpdateMissiles(dt);
     UpdateCritters(dt);
+    UpdateBoss(dt);
     ResolveBulletHits();
     for (Pilot& p : pilots_) { UpdatePilot(p, dt); }
     if (shake_ > 0.0f) { shake_ -= dt; }
@@ -552,11 +556,57 @@ void Game::UpdateCritters(float dt)
     }
 }
 
+// The gunship arrives as each stage turns over, and is scored when it drops.
+void Game::UpdateBoss(float dt)
+{
+    const int stage = terrain_.StageIndex();
+    if (stage != lastStage_) {
+        lastStage_ = stage;
+        if (!boss_.Active()) { boss_.Spawn(stage); }
+    }
+    if (!boss_.Active()) { return; }
+
+    std::array<Vector2, cfg::kMaxPilots> targets {};
+    int n = 0;
+    for (const Pilot& p : pilots_) { if (p.Flying()) { targets[static_cast<size_t>(n++)] = p.plane.Centre(); } }
+    if (boss_.Update(dt, targets.data(), n, shells_)) { return; }   // it gave up and left
+
+    // Flying into it hurts, and the shield does not save you from a gunship.
+    if (boss_.Fighting()) {
+        for (Pilot& p : pilots_) {
+            if (!p.Flying() || p.grace > 0.0f) { continue; }
+            if (!CheckCollisionRecs(p.plane.Bounds(), boss_.Bounds())) { continue; }
+            effects_.Spawn(p.plane.Centre(), Effects::Style::Rock);
+            audio_.Play(Audio::Sfx::Crunch);
+            haptics::Play(haptics::Kind::Heavy);
+            if (Damage(p, cfg::kBossRamDamage)) { BeginCrash(p, Player::CrashStyle::Roll); }
+        }
+    }
+}
+
 void Game::ResolveBulletHits()
 {
     // Bounded: kMaxBullets x (kMaxObstacles + kMaxMissiles) checks at most.
     for (int b = 0; b < Bullets::Capacity(); ++b) {
         if (!bullets_.Active(b)) { continue; }
+        if (boss_.Fighting() && CheckCollisionRecs(bullets_.Bounds(b), boss_.Bounds())) {
+            bullets_.Kill(b);
+            if (boss_.Hit()) {
+                // Down it goes: a cluster of bursts, points, and a parting gift.
+                const Vector2 c = boss_.Centre();
+                effects_.Spawn(c, Effects::Style::Plane);
+                effects_.Spawn(Vector2 {c.x - cfg::kBossW * 0.3f, c.y}, Effects::Style::Rock);
+                effects_.Spawn(Vector2 {c.x + cfg::kBossW * 0.3f, c.y}, Effects::Style::Fuel);
+                audio_.Play(Audio::Sfx::Crunch);
+                haptics::Play(haptics::Kind::Heavy);
+                shake_ = cfg::kShakeSeconds;
+                ++bosses_;
+                boss_.Clear();
+            } else {
+                audio_.Play(Audio::Sfx::Pop);
+            }
+            continue;
+        }
         const int m = missiles_.Find(bullets_.Bounds(b));
         if (m >= 0) {
             effects_.Spawn(missiles_.Position(m), Effects::Style::Fuel);
@@ -818,7 +868,8 @@ int Game::Score() const
     const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill
                     + boatKills_ * cfg::kPointsPerBoat + gunKills_ * cfg::kPointsPerGun
                     + stars_ * cfg::kPointsPerStar + bridges_ * cfg::kPointsPerBridge
-                    + samKills_ * cfg::kPointsPerSam + missileKills_ * cfg::kPointsPerMissile;
+                    + samKills_ * cfg::kPointsPerSam + missileKills_ * cfg::kPointsPerMissile
+                    + bosses_ * cfg::kPointsPerBoss;
     assert(score >= 0);
     return score;
 }
@@ -865,6 +916,7 @@ void Game::DrawWorld() const
     missiles_.Draw();
     bullets_.Draw(sprites_.Bullet());
     for (const Pilot& p : pilots_) { p.plane.Draw(sprites_.Player(), PilotVisible(p)); if (p.Flying()) { DrawPowerUps(p); } }
+    boss_.Draw(sprites_);
     effects_.Draw();
 }
 
@@ -919,6 +971,7 @@ void Game::DrawHud() const
     const char* extras = TextFormat("Stars %d   Otters %d", stars_, otters_);
     DrawHudText(extras, (cfg::kScreenW - MeasureText(extras, 16)) / 2, 60, 16);
     DrawStageBanner();
+    DrawBossBar();
 
     const Pilot& p1 = pilots_[0];
     DrawHudText(p1.name.data(), 10, 8, 20);
@@ -939,6 +992,20 @@ void Game::DrawHud() const
     } else {
         DrawLives(p1, cfg::kScreenW - 10, 8, true);
     }
+}
+
+// A red bar under the score while the gunship is up, so the fight has a clock.
+void Game::DrawBossBar() const
+{
+    if (!boss_.Fighting()) { return; }
+    const int w = 320, h = 10;
+    const int x = (cfg::kScreenW - w) / 2, y = 84;
+    const float frac = static_cast<float>(boss_.Hp()) / static_cast<float>(boss_.MaxHp());
+    const char* label = "GUNSHIP";
+    DrawHudText(label, (cfg::kScreenW - MeasureText(label, 14)) / 2, y - 18, 14);
+    DrawRectangle(x, y, w, h, Fade(BLACK, 0.45f));
+    DrawRectangle(x, y, static_cast<int>(static_cast<float>(w) * frac), h, Color {220, 60, 60, 255});
+    DrawRectangleLines(x, y, w, h, RAYWHITE);
 }
 
 void Game::DrawHealthBar(const Pilot& p, int x, int y) const
