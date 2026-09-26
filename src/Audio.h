@@ -36,6 +36,12 @@ public:
     void Play(Sfx sfx);       // restart the effect from the beginning
     void Sustain(Sfx sfx);    // keep it going: retrigger only once it has finished
     void ToggleMusic();       // mute / unmute the loop
+
+    // Transposes the loop so each stage sounds different without another
+    // tune: 0 is the tune as written, +/- n shifts by n semitones. raylib
+    // resamples, so the tempo rides along with the pitch — which is the
+    // point, the river speeds up too.
+    void SetMusicKey(int semitones);
     bool MusicOn() const { return musicOn_; }
 
 private:
@@ -59,5 +65,6 @@ private:
 
     bool                       ready_ {false};
     bool                       musicOn_ {true};
+    int                        musicKey_ {0};
     std::array<Sound, kCount>  bank_ {};
 };

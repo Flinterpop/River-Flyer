@@ -7,6 +7,7 @@
 #include "Touch.h"
 #include "Screen.h"
 #include "Haptics.h"
+#include "Leaderboard.h"
 
 namespace {
 
@@ -85,6 +86,12 @@ Rectangle PauseFlyBtn()    { return Rectangle {static_cast<float>(kPausePx + 20)
 Rectangle PauseTitleBtn()  { return Rectangle {static_cast<float>(kPausePx + 220), static_cast<float>(PausePy() + 80),  180.0f, 56.0f}; }
 Rectangle PauseMusicBtn()  { return Rectangle {static_cast<float>(kPausePx + 20),  static_cast<float>(PausePy() + 160), 380.0f, 50.0f}; }
 
+// Game-over panel and its optional Game Center button.
+constexpr int kOverPanelW = 400, kOverPanelH = 470;
+int       OverPx()         { return (cfg::kScreenW - kOverPanelW) / 2; }
+int       OverPy()         { return (screen::H() - kOverPanelH) / 2; }
+Rectangle BoardBtn()       { return Rectangle {static_cast<float>(OverPx() + 100), static_cast<float>(OverPy() + kOverPanelH - 86), 200.0f, 36.0f}; }
+
 constexpr float kOverTapDelay = 1.0f;                                // seconds before a tap leaves the game-over panel
 
 } // namespace
@@ -134,6 +141,7 @@ void Game::StartGame()
         assert(!terrain_.HitsBank(p.plane.Bounds()));   // must spawn in open water
     }
     touch::SetPlayers(PilotCount());   // two pilots split the screen
+    audio_.SetMusicKey(cfg::kMusicKeys[terrain_.StageIndex() % cfg::kStageCount]);
     state_ = State::Playing;
 }
 
@@ -562,6 +570,7 @@ void Game::UpdateBoss(float dt)
     const int stage = terrain_.StageIndex();
     if (stage != lastStage_) {
         lastStage_ = stage;
+        audio_.SetMusicKey(cfg::kMusicKeys[stage % cfg::kStageCount]);
         if (!boss_.Active()) { boss_.Spawn(stage); }
     }
     if (!boss_.Active()) { return; }
@@ -808,6 +817,7 @@ void Game::FinishGame()
         newRow_ = scores_.Add(who.data(), finalScore_);
         audio_.Play(Audio::Sfx::Fanfare);
     }
+    if (!twoPlayer_) { leaderboard::Post(finalScore_); }   // a co-op score is not one player's
     overT_ = 0.0f;
     state_ = State::GameOver;
 }
@@ -847,6 +857,11 @@ void Game::UpdateGameOver(float dt)
     assert(state_ == State::GameOver);
     effects_.Update(dt);   // let the final explosion finish
     overT_ += dt;
+    if (leaderboard::Available() && overT_ >= kOverTapDelay && touch::Tapped()
+        && CheckCollisionPointRec(touch::TapPos(), BoardBtn())) {
+        leaderboard::Show();
+        return;
+    }
     if (input::MenuConfirm() || IsKeyPressed(KEY_R)) { state_ = State::Title; }
     if (touch::Tapped() && overT_ >= kOverTapDelay) { state_ = State::Title; }   // not the fire finger still coming down
 }
@@ -1290,8 +1305,8 @@ void Game::DrawPeekTable() const
 void Game::DrawGameOver() const
 {
     assert(state_ == State::GameOver);
-    const int panelW = 400, panelH = 470;
-    const int px = (cfg::kScreenW - panelW) / 2, py = (screen::H() - panelH) / 2;
+    const int panelW = kOverPanelW, panelH = kOverPanelH;
+    const int px = OverPx(), py = OverPy();
     const char* msg1 = "Oh no! Out of planes!";
     const char* msg2 = touch::Enabled() ? "Tap: back to the title" : "SPACE: back to the title";
     DrawRectangle(px, py, panelW, panelH, Fade(BLACK, 0.7f));
@@ -1300,5 +1315,6 @@ void Game::DrawGameOver() const
     DrawText(TextFormat("Your score: %06d%s", finalScore_, (newRow_ >= 0) ? "  - new high score!" : ""), px + 30, py + 60, 18, RAYWHITE);
     DrawText(TextFormat("Stars %d  Bridges %d  SAMs %d  Missiles %d  Otters %d", stars_, bridges_, samKills_, missileKills_, otters_), px + 30, py + 80, 16, LIGHTGRAY);
     DrawScoreTable(px + 30, py + 100);
+    if (leaderboard::Available()) { DrawButton(BoardBtn(), "LEADERBOARD", 18); }
     DrawText(msg2, (cfg::kScreenW - MeasureText(msg2, 22)) / 2, py + panelH - 40, 22, RAYWHITE);
 }

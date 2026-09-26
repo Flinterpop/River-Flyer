@@ -112,6 +112,13 @@ void Audio::Sustain(Sfx sfx)
     if (!IsSoundPlaying(s)) { PlaySound(s); }
 }
 
+void Audio::SetMusicKey(int semitones)
+{
+    if (!ready_ || semitones == musicKey_) { return; }
+    musicKey_ = semitones;
+    SetSoundPitch(bank_[static_cast<size_t>(Sfx::Music)], std::pow(2.0f, static_cast<float>(semitones) / 12.0f));
+}
+
 void Audio::ToggleMusic()
 {
     musicOn_ = !musicOn_;

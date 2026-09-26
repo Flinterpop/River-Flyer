@@ -334,6 +334,8 @@ constexpr float kBossRamDamage    = 60.0f;                           // flying i
 constexpr float kMusicBpm     = 140.0f;
 constexpr int   kMusicEighths = 64;                                  // 8 bars of 8
 constexpr float kMusicVolume  = 0.35f;
+// One key per stage, so a long run does not loop the same eight bars for ever.
+constexpr int   kMusicKeys[kStageCount] = { 0, 2, -3, 5 };
 
 // HUD.
 constexpr int   kFuelBarW     = 200;
