@@ -2,7 +2,7 @@
 
 [![Release][release-badge]][release-latest] [![Build][build-badge]][build-runs] [![License: MIT][license-badge]][license]
 
-[release-badge]: https://img.shields.io/badge/release-v0.7.0-blue
+[release-badge]: https://img.shields.io/badge/release-v0.7.1-blue
 [release-latest]: https://github.com/Flinterpop/River-Flyer/releases/latest
 [build-badge]: https://github.com/Flinterpop/River-Flyer/actions/workflows/build.yml/badge.svg
 [build-runs]: https://github.com/Flinterpop/River-Flyer/actions/workflows/build.yml
@@ -47,7 +47,7 @@ Install `RiverFlyer-<version>-android.apk` from the [latest release][release-lat
 Touch controls, drawn in the black bars around the river on a tall phone and over its corners on a squarer tablet:
 
 - **Drag anywhere** to steer: the plane follows the finger's movement, not its position, so it never hides under a thumb. Push up for the afterburner, pull down for the drag chute.
-- **FIRE** (hold), **CHAFF** (tap) and **JAM** (hold) sit under the right thumb; the pause button is top right. The phone's Back button also pauses, and quits from the title screen.
+- **FIRE** (hold), **CHAFF** (tap) and **JAM** (hold) sit in a row along the bottom right, under the right thumb; the pause button is top right. The phone's Back button also pauses, and quits from the title screen.
 - Menus are tapped: **TAP TO FLY** starts, a title row changes when tapped (left half back, right half forward), a pilot's name opens the on-screen keyboard, and the pause panel has FLY ON / QUIT / MUSIC buttons.
 - A gamepad paired with the device works too, with the same buttons as on the Xbox.
 - Scores and names are kept in the app's own storage; uninstalling clears them. Leaving the app (or a call) pauses the game.
@@ -231,12 +231,12 @@ Notes:
 Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK and the iOS app read it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
 
 ```powershell
-git tag -a v0.7.0 -m "v0.7.0"
-git push origin main v0.7.0
-Compress-Archive build\Release\scroller.exe RiverFlyer-v0.7.0-win64.zip
-Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.7.0-web.zip
-Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.7.0-android.apk
-gh release create v0.7.0 RiverFlyer-v0.7.0-win64.zip RiverFlyer-v0.7.0-web.zip RiverFlyer-v0.7.0-android.apk --title "v0.7.0" --notes-file notes.md
+git tag -a v0.7.1 -m "v0.7.1"
+git push origin main v0.7.1
+Compress-Archive build\Release\scroller.exe RiverFlyer-v0.7.1-win64.zip
+Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.7.1-web.zip
+Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.7.1-android.apk
+gh release create v0.7.1 RiverFlyer-v0.7.1-win64.zip RiverFlyer-v0.7.1-web.zip RiverFlyer-v0.7.1-android.apk --title "v0.7.1" --notes-file notes.md
 ```
 
 ## License

@@ -51,7 +51,10 @@ float Unit()
 }
 
 Circle FireBtn()  { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 1.7f * u, static_cast<float>(GetScreenHeight()) - 1.7f * u}, kFireR * u}; }
-Circle JamBtn()   { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 1.7f * u, static_cast<float>(GetScreenHeight()) - 4.3f * u}, kSmallR * u}; }
+// JAM sits in the bottom row with CHAFF rather than above FIRE: on a tall phone
+// the canvas grows until the bar below it is only about 2.5 u high, and a
+// button stacked above FIRE would land on the river.
+Circle JamBtn()   { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 6.3f * u, static_cast<float>(GetScreenHeight()) - 1.5f * u}, kSmallR * u}; }
 Circle ChaffBtn() { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 4.3f * u, static_cast<float>(GetScreenHeight()) - 1.5f * u}, kSmallR * u}; }
 Circle PauseBtn() { const float u = Unit(); return Circle {{static_cast<float>(GetScreenWidth()) - 0.9f * u, 0.9f * u}, kPauseR * u}; }
 
