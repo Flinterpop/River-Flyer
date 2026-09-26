@@ -40,6 +40,15 @@ Notes:
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
 - **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. There is also a native iPad / iPhone app, the same C++ game built for iOS (see [iOS build](#ios-build)); it has to be built on a Mac with Xcode and installed with a cable or TestFlight, since it is not on the App Store.
 
+### Game Center
+
+Solo runs post to a **Best Score** leaderboard when the player is signed in
+to Game Center (the sign-in is Apple's own, shown once at start-up and
+dismissible for good). The game-over panel grows a LEADERBOARD button while
+a player is signed in. Two-player runs are not posted: a shared score under
+one account would not mean much on a global board. Everything is a no-op on
+the other platforms — see `src/Leaderboard.h`.
+
 ### Stage bosses
 
 Every stage change sends up a **gunship**: it slides in from the top, weaves

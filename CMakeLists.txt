@@ -106,6 +106,7 @@ set(RF_SOURCES
     src/Canvas.cpp
     src/Screen.cpp
     src/Haptics.cpp
+    src/Leaderboard.cpp
     src/Game.cpp
     src/Player.cpp
     src/Terrain.cpp
@@ -146,7 +147,7 @@ elseif(IOS)
     set(RF_BUILD "${RF_BUILD_DEFAULT}" CACHE STRING "CFBundleVersion for the iOS build")
     set(RF_TEAM_ID "" CACHE STRING "Apple developer team id for signing a device build (empty: simulator only)")
 
-    add_executable(scroller MACOSX_BUNDLE ${RF_SOURCES} src/Haptics.mm ios/Assets.xcassets)
+    add_executable(scroller MACOSX_BUNDLE ${RF_SOURCES} src/Haptics.mm src/Leaderboard.mm ios/Assets.xcassets)
     set_source_files_properties(ios/Assets.xcassets PROPERTIES MACOSX_PACKAGE_LOCATION Resources)   # Xcode compiles the icon into Assets.car
     set_target_properties(scroller PROPERTIES
         OUTPUT_NAME                                 "River Flyer"
@@ -164,6 +165,7 @@ elseif(IOS)
         XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC       NO                    # miniaudio manages its own retain/release
         # Without these an `xcodebuild archive` produces an empty archive, so
         # the app can't be exported for TestFlight or the App Store.
+        XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS      "${CMAKE_SOURCE_DIR}/ios/RiverFlyer.entitlements"
         XCODE_ATTRIBUTE_SKIP_INSTALL                NO
         XCODE_ATTRIBUTE_INSTALL_PATH                "$(LOCAL_APPS_DIR)"
     )
@@ -187,7 +189,7 @@ if(EMSCRIPTEN)
 elseif(ANDROID)
     target_link_libraries(scroller PRIVATE raylib EGL)   # EGL: main.cpp checks for a live context
 elseif(IOS)
-    target_link_libraries(scroller PRIVATE raylib)       # SDL3 and the frameworks come with it
+    target_link_libraries(scroller PRIVATE raylib "-framework GameKit")   # SDL3 and the rest come with raylib
     target_compile_definitions(scroller PRIVATE RF_IOS)  # the game's own host switch (clang has no single iOS macro)
 else()
     target_link_libraries(scroller PRIVATE raylib glfw $<$<PLATFORM_ID:Windows>:winmm gdi32 opengl32 shell32>)
