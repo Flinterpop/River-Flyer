@@ -40,6 +40,33 @@ Notes:
 - The same page works on any tablet or laptop browser on the network. Nothing is uploaded anywhere; the PC only serves the files while the command runs.
 - **iPad and iPhone**: open the same address in Safari. A touchscreen gets the touch controls described under [Android](#on-an-android-phone-or-tablet): drag to steer, FIRE / CHAFF / JAM buttons, tappable menus. Use Share, then **Add to Home Screen**; opening it from there runs full screen like an app. There is also a native iPad / iPhone app, the same C++ game built for iOS (see [iOS build](#ios-build)); it has to be built on a Mac with Xcode and installed with a cable or TestFlight, since it is not on the App Store.
 
+### Stage bosses
+
+Every stage change sends up a **gunship**: it slides in from the top, weaves
+across the river raking it with three-shell salvos, and takes bullets until
+it goes down — a red bar under the score tracks its armour, which grows with
+each stage. Flying into it hurts. It is not a wall: the river keeps
+scrolling, and if nobody brings it down it climbs away after half a minute.
+Killing one is worth 2,000.
+
+### Assist
+
+A fifth title-screen row, **ASSIST**, gives one seat an easier ride without
+changing the world for both (spawn rates, scroll speed and the guns are
+shared by definition): two extra planes, half the hull damage and a slower
+fuel burn. With one player it is OFF / ON; with two it cycles
+OFF / PILOT 1 / PILOT 2 / BOTH, and the assisted pilot's name carries an
+ASSIST tag on the HUD. Useful when a seven-year-old and a twelve-year-old
+want the same game.
+
+### Two players on one tablet
+
+Set **PLAYERS** to 2 on the title screen and the touch layer splits down the
+middle: pilot one steers in the right half with FIRE / CHAFF / JAM in the
+bottom-right corner, pilot two has the mirrored set on the left. Each half
+has its own floating stick, so two people can share an iPad. The planes carry
+a small **1** and **2** and start on their own player's side.
+
 ### On an Android phone or tablet
 
 Install `RiverFlyer-<version>-android.apk` from the [latest release][release-latest] (or build it, see [Android build](#android-build)): copy it to the device or open the link there, allow the install from that source when asked, and tap the icon. The whole game is in the app; nothing is downloaded and no permissions are requested.

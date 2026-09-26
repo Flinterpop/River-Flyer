@@ -18,7 +18,9 @@
 #include "Config.h"
 #include "HighScores.h"
 #include "Profiles.h"
+#include "Boss.h"
 #include "Screen.h"
+#include "Shells.h"
 #include "Terrain.h"
 
 namespace {
@@ -219,6 +221,56 @@ void TestProfiles()
 
 } // namespace
 
+// The stage boss: armour scales with the stage, it only takes hits once it
+// has reached station, it stays on screen while it weaves, it fires, and it
+// leaves of its own accord if nobody shoots it down.
+void TestBoss()
+{
+    Shells shells;
+    shells.Reset();
+    Boss boss;
+    boss.Reset();
+    CHECK(!boss.Active());
+
+    boss.Spawn(2);
+    CHECK(boss.Active());
+    CHECK(!boss.Fighting());                       // still on its way in
+    CHECK(boss.Hp() == cfg::kBossHp + 2 * cfg::kBossHpPerStage);
+    CHECK(!boss.Hit());                            // no free hits during the entry
+    CHECK(boss.Hp() == boss.MaxHp());
+
+    const Vector2 target {static_cast<float>(cfg::kScreenW) * 0.5f, screen::Bottom() - 200.0f};
+    const float   dt = 1.0f / 60.0f;
+    for (int i = 0; i < 600 && !boss.Fighting(); ++i) { boss.Update(dt, &target, 1, shells); }
+    CHECK(boss.Fighting());
+    CHECK(std::fabs(boss.Bounds().y - cfg::kBossStationY) < 0.01f);
+
+    float minX = 1e9f, maxX = -1e9f;
+    for (int i = 0; i < 600; ++i) {
+        boss.Update(dt, &target, 1, shells);
+        const Rectangle r = boss.Bounds();
+        minX = (r.x < minX) ? r.x : minX;
+        maxX = (r.x > maxX) ? r.x : maxX;
+        CHECK(r.x >= cfg::kBossMargin - 0.01f);
+        CHECK(r.x + cfg::kBossW <= static_cast<float>(cfg::kScreenW) - cfg::kBossMargin + 0.01f);
+    }
+    CHECK(maxX - minX > 100.0f);                   // it really does weave
+    CHECK(shells.Find(Rectangle {0.0f, 0.0f, static_cast<float>(cfg::kScreenW), screen::Bottom()}) >= 0);
+
+    int hits = 0;
+    const int armour = boss.Hp();
+    while (boss.Hp() > 0 && hits < armour + 2) { const bool dead = boss.Hit(); ++hits; if (dead) { break; } }
+    CHECK(hits == armour);
+    boss.Clear();
+    CHECK(!boss.Active());
+
+    boss.Spawn(0);
+    bool left = false;
+    for (int i = 0; i < 60 * 120 && !left; ++i) { left = boss.Update(dt, &target, 1, shells); }
+    CHECK(left);
+    CHECK(!boss.Active());
+}
+
 int main()
 {
     SetTraceLogLevel(LOG_WARNING);   // no raylib banner, but keep storage warnings
@@ -227,6 +279,7 @@ int main()
     TestTerrain();
     TestHighScores();
     TestProfiles();
+    TestBoss();
 
     std::printf("%s: %d checks, %d failed\n", (checksFailed == 0) ? "PASS" : "FAIL", checksRun, checksFailed);
     return (checksFailed == 0) ? 0 : 1;

@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "Touch.h"
 #include "Screen.h"
+#include "Haptics.h"
 
 namespace {
 
@@ -60,7 +61,7 @@ WideKey WideKeyAt(int col)
 
 // Panel geometry, shared by the drawing code and the touch hit-tests so a tap
 // lands exactly on what was drawn.
-constexpr int kTitlePanelW = 560, kTitlePanelH = 420;
+constexpr int kTitlePanelW = 560, kTitlePanelH = 468;
 constexpr int kTitlePx     = (cfg::kScreenW - kTitlePanelW) / 2;
 int       TitlePy()        { return (screen::H() - kTitlePanelH) / 2 + 40; }
 int       TitleRowY0()     { return TitlePy() + 30; }                 // first row; rows are kTitleRowH apart
@@ -68,7 +69,7 @@ constexpr int kTitleRowH   = 48;
 constexpr int kTitleLabelX = cfg::kScreenW / 2 - 200;
 constexpr int kTitleArrowW = 245;                                    // label + "<" zone, then value, then ">" zone
 constexpr int kTitleValueW = 200;
-Rectangle PlayBtn()        { return Rectangle {static_cast<float>(kTitlePx + 30), static_cast<float>(TitlePy() + 270), static_cast<float>(kTitlePanelW - 60), 56.0f}; }
+Rectangle PlayBtn()        { return Rectangle {static_cast<float>(kTitlePx + 30), static_cast<float>(TitlePy() + 318), static_cast<float>(kTitlePanelW - 60), 56.0f}; }
 
 constexpr int kNamePanelW  = kKeyCols * kKeyCell + 60, kNamePanelH = 390;
 constexpr int kNamePx      = (cfg::kScreenW - kNamePanelW) / 2;
@@ -110,6 +111,9 @@ void Game::StartGame()
     shells_.Reset();
     missiles_.Reset();
     terrain_.Reset(TuningFor(Diff()));
+    boss_.Reset();
+    lastStage_ = terrain_.StageIndex();
+    bosses_ = 0;
     kills_ = 0; boatKills_ = 0; gunKills_ = 0; samKills_ = 0; missileKills_ = 0; stars_ = 0; bridges_ = 0; otters_ = 0;
     finalScore_ = 0; newRow_ = -1; shake_ = 0.0f;
 
@@ -119,8 +123,9 @@ void Game::StartGame()
         if (p.out) { continue; }
         p.map = (i == 0) ? input::PilotOne(!twoPlayer_) : input::PilotTwo();
         SetName(p.name, profiles_.At(profileIdx_[static_cast<size_t>(i)]));
-        p.plane.Reset(twoPlayer_ ? ((i == 0) ? -50.0f : 50.0f) : 0.0f);
-        p.lives  = Diff().lives;
+        p.plane.Reset(twoPlayer_ ? ((i == 0) ? 50.0f : -50.0f) : 0.0f);   // pilot one on the right, matching their half of the touch controls
+        p.assist = ((assistMask_ >> i) & 1) != 0;
+        p.lives  = Diff().lives + (p.assist ? cfg::kAssistLives : 0);
         p.fuel   = cfg::kFuelMax;
         p.health = cfg::kHealthMax;
         p.grace = 0.0f; p.fireCooldown = 0.0f; p.foamTimer = 0.0f; p.refuelPump = -1;
@@ -128,6 +133,7 @@ void Game::StartGame()
         p.scrapeTimer = 0.0f; p.smokeTimer = 0.0f; p.hurtFlash = 0.0f;
         assert(!terrain_.HitsBank(p.plane.Bounds()));   // must spawn in open water
     }
+    touch::SetPlayers(PilotCount());   // two pilots split the screen
     state_ = State::Playing;
 }
 
@@ -174,6 +180,7 @@ void Game::UpdateTitle(float dt)
             case Row::PilotOne:   profileIdx_[0] = (profileIdx_[0] + step + n) % n; break;
             case Row::PilotTwo:   profileIdx_[1] = (profileIdx_[1] + step + n) % n; break;
             case Row::Difficulty: difficulty_ = (difficulty_ + step + cfg::kDifficultyCount) % cfg::kDifficultyCount; break;
+            case Row::Assist:     CycleAssist(step); break;
             case Row::Count:      break;
         }
     }
@@ -214,6 +221,7 @@ void Game::TouchTitle(Vector2 p)
             case Row::PilotOne:   profileIdx_[0] = (profileIdx_[0] + step + n) % n; break;
             case Row::PilotTwo:   profileIdx_[1] = (profileIdx_[1] + step + n) % n; break;
             case Row::Difficulty: difficulty_ = (difficulty_ + step + cfg::kDifficultyCount) % cfg::kDifficultyCount; break;
+            case Row::Assist:     CycleAssist(step); break;
             case Row::Count:      break;
         }
         return;
@@ -376,6 +384,7 @@ void Game::UpdatePlaying(float dt)
     UpdateSams(dt);
     UpdateMissiles(dt);
     UpdateCritters(dt);
+    UpdateBoss(dt);
     ResolveBulletHits();
     for (Pilot& p : pilots_) { UpdatePilot(p, dt); }
     if (shake_ > 0.0f) { shake_ -= dt; }
@@ -444,7 +453,7 @@ void Game::UpdateFiring(Pilot& p, float dt)
 bool Game::UpdateFuel(Pilot& p, float dt)
 {
     assert(dt >= 0.0f && p.Flying());
-    p.fuel -= Diff().fuelBurn * (p.jamming ? cfg::kJamFuelMult : 1.0f) * dt;
+    p.fuel -= Diff().fuelBurn * (p.jamming ? cfg::kJamFuelMult : 1.0f) * (p.assist ? cfg::kAssistFuelBurn : 1.0f) * dt;
 
     // Flying over a depot refuels without destroying it.
     p.refuelPump = -1;
@@ -547,11 +556,57 @@ void Game::UpdateCritters(float dt)
     }
 }
 
+// The gunship arrives as each stage turns over, and is scored when it drops.
+void Game::UpdateBoss(float dt)
+{
+    const int stage = terrain_.StageIndex();
+    if (stage != lastStage_) {
+        lastStage_ = stage;
+        if (!boss_.Active()) { boss_.Spawn(stage); }
+    }
+    if (!boss_.Active()) { return; }
+
+    std::array<Vector2, cfg::kMaxPilots> targets {};
+    int n = 0;
+    for (const Pilot& p : pilots_) { if (p.Flying()) { targets[static_cast<size_t>(n++)] = p.plane.Centre(); } }
+    if (boss_.Update(dt, targets.data(), n, shells_)) { return; }   // it gave up and left
+
+    // Flying into it hurts, and the shield does not save you from a gunship.
+    if (boss_.Fighting()) {
+        for (Pilot& p : pilots_) {
+            if (!p.Flying() || p.grace > 0.0f) { continue; }
+            if (!CheckCollisionRecs(p.plane.Bounds(), boss_.Bounds())) { continue; }
+            effects_.Spawn(p.plane.Centre(), Effects::Style::Rock);
+            audio_.Play(Audio::Sfx::Crunch);
+            haptics::Play(haptics::Kind::Heavy);
+            if (Damage(p, cfg::kBossRamDamage)) { BeginCrash(p, Player::CrashStyle::Roll); }
+        }
+    }
+}
+
 void Game::ResolveBulletHits()
 {
     // Bounded: kMaxBullets x (kMaxObstacles + kMaxMissiles) checks at most.
     for (int b = 0; b < Bullets::Capacity(); ++b) {
         if (!bullets_.Active(b)) { continue; }
+        if (boss_.Fighting() && CheckCollisionRecs(bullets_.Bounds(b), boss_.Bounds())) {
+            bullets_.Kill(b);
+            if (boss_.Hit()) {
+                // Down it goes: a cluster of bursts, points, and a parting gift.
+                const Vector2 c = boss_.Centre();
+                effects_.Spawn(c, Effects::Style::Plane);
+                effects_.Spawn(Vector2 {c.x - cfg::kBossW * 0.3f, c.y}, Effects::Style::Rock);
+                effects_.Spawn(Vector2 {c.x + cfg::kBossW * 0.3f, c.y}, Effects::Style::Fuel);
+                audio_.Play(Audio::Sfx::Crunch);
+                haptics::Play(haptics::Kind::Heavy);
+                shake_ = cfg::kShakeSeconds;
+                ++bosses_;
+                boss_.Clear();
+            } else {
+                audio_.Play(Audio::Sfx::Pop);
+            }
+            continue;
+        }
         const int m = missiles_.Find(bullets_.Bounds(b));
         if (m >= 0) {
             effects_.Spawn(missiles_.Position(m), Effects::Style::Fuel);
@@ -606,6 +661,7 @@ void Game::Collect(Pilot& p, int obstacle)
     }
     effects_.Spawn(RectCentre(o.rect), Effects::Style::Plane);
     audio_.Play(Audio::Sfx::Ding);
+    haptics::Play(haptics::Kind::Light);
     terrain_.RemoveObstacle(obstacle);
 }
 
@@ -615,8 +671,11 @@ bool Game::Damage(Pilot& p, float amount)
 {
     assert(p.Flying() && amount > 0.0f);
     if (p.shield > 0.0f) { return false; }          // the bubble eats it
+    if (p.assist) { amount *= cfg::kAssistDamage; }
     p.health -= amount;
     p.hurtFlash = cfg::kHurtFlashSeconds;
+    // A scrape arrives as a trickle every frame, so only a real bite buzzes.
+    if (amount >= cfg::kShellDamage) { haptics::Play(haptics::Kind::Heavy); }
     if (p.health <= 0.0f) { p.health = 0.0f; return true; }
     return false;
 }
@@ -681,6 +740,7 @@ void Game::CheckPilotCrash(Pilot& p)
         const float away = terrain_.BankEscapeX(box);
         p.scrapeTimer -= GetFrameTime();
         if (p.scrapeTimer <= 0.0f) {
+            if (p.scrapeTimer <= -cfg::kScrapeHapticGap) { haptics::Play(haptics::Kind::Medium); }
             p.scrapeTimer = cfg::kScrapeSparkGap;
             const Vector2 c = p.plane.Centre();
             effects_.SpawnSparks(Vector2 {c.x - away * cfg::kPlayerW * 0.5f, c.y}, -away);
@@ -700,6 +760,7 @@ void Game::BeginCrash(Pilot& p, Player::CrashStyle style)
     p.plane.BeginCrash(style);
     p.refuelPump = -1;
     shake_ = cfg::kShakeSeconds;
+    haptics::Play(haptics::Kind::Heavy);
     assert(p.plane.Crashing());
 }
 
@@ -718,7 +779,7 @@ void Game::FinishCrash(Pilot& p)
     }
     // Fresh plane at the start position, full tank, untouchable for a moment.
     const int idx = static_cast<int>(&p - pilots_.data());
-    p.plane.Reset(twoPlayer_ ? ((idx == 0) ? -50.0f : 50.0f) : 0.0f);
+    p.plane.Reset(twoPlayer_ ? ((idx == 0) ? 50.0f : -50.0f) : 0.0f);
     p.fuel   = cfg::kFuelMax;
     p.health = cfg::kHealthMax;
     p.grace  = cfg::kGraceSeconds;
@@ -807,7 +868,8 @@ int Game::Score() const
     const int score = static_cast<int>(terrain_.Distance() * cfg::kPointsPerPx) + kills_ * cfg::kPointsPerKill
                     + boatKills_ * cfg::kPointsPerBoat + gunKills_ * cfg::kPointsPerGun
                     + stars_ * cfg::kPointsPerStar + bridges_ * cfg::kPointsPerBridge
-                    + samKills_ * cfg::kPointsPerSam + missileKills_ * cfg::kPointsPerMissile;
+                    + samKills_ * cfg::kPointsPerSam + missileKills_ * cfg::kPointsPerMissile
+                    + bosses_ * cfg::kPointsPerBoss;
     assert(score >= 0);
     return score;
 }
@@ -854,6 +916,7 @@ void Game::DrawWorld() const
     missiles_.Draw();
     bullets_.Draw(sprites_.Bullet());
     for (const Pilot& p : pilots_) { p.plane.Draw(sprites_.Player(), PilotVisible(p)); if (p.Flying()) { DrawPowerUps(p); } }
+    boss_.Draw(sprites_);
     effects_.Draw();
 }
 
@@ -861,6 +924,16 @@ void Game::DrawPowerUps(const Pilot& p) const
 {
     assert(p.Flying());
     const Vector2 c = p.plane.Centre();
+    if (twoPlayer_) {
+        // Whose plane is whose: "1" and "2" ride just above the canopy.
+        const int   idx   = static_cast<int>(&p - pilots_.data());
+        const char* label = (idx == 0) ? "1" : "2";
+        const int   size  = 14;
+        const int   x     = static_cast<int>(c.x) - MeasureText(label, size) / 2;
+        const int   y     = static_cast<int>(c.y) - static_cast<int>(cfg::kPlayerH * 0.5f) - size - 2;
+        DrawText(label, x + 1, y + 1, size, Fade(BLACK, 0.6f));
+        DrawText(label, x, y, size, (idx == 0) ? RAYWHITE : Color {170, 215, 255, 255});
+    }
     if (p.shield > 0.0f) {
         const float pulse = 0.85f + 0.15f * std::sin(static_cast<float>(GetTime()) * 8.0f);
         const float fade  = (p.shield < 1.5f) ? p.shield / 1.5f : 1.0f;   // flickers out
@@ -898,9 +971,11 @@ void Game::DrawHud() const
     const char* extras = TextFormat("Stars %d   Otters %d", stars_, otters_);
     DrawHudText(extras, (cfg::kScreenW - MeasureText(extras, 16)) / 2, 60, 16);
     DrawStageBanner();
+    DrawBossBar();
 
     const Pilot& p1 = pilots_[0];
     DrawHudText(p1.name.data(), 10, 8, 20);
+    if (p1.assist) { DrawHudText("ASSIST", 10 + MeasureText(p1.name.data(), 20) + 10, 11, 14); }
     DrawFuelBar(p1, 10, 36);
     DrawHealthBar(p1, 10, 56);
     DrawWarnings(p1, 10, 120, false);
@@ -910,12 +985,27 @@ void Game::DrawHud() const
         DrawWarnings(p2, cfg::kScreenW - 10, 120, true);
         const int nameW = MeasureText(p2.name.data(), 20);
         DrawHudText(p2.name.data(), cfg::kScreenW - 10 - nameW, 8, 20);
+        if (p2.assist) { DrawHudText("ASSIST", cfg::kScreenW - 10 - nameW - MeasureText("ASSIST", 14) - 10, 11, 14); }
         DrawFuelBar(p2, cfg::kScreenW - 10 - 50 - cfg::kFuelBarW, 36);
         DrawHealthBar(p2, cfg::kScreenW - 10 - 50 - cfg::kHealthBarW, 56);
         DrawLives(p2, cfg::kScreenW - 10, 76, true);
     } else {
         DrawLives(p1, cfg::kScreenW - 10, 8, true);
     }
+}
+
+// A red bar under the score while the gunship is up, so the fight has a clock.
+void Game::DrawBossBar() const
+{
+    if (!boss_.Fighting()) { return; }
+    const int w = 320, h = 10;
+    const int x = (cfg::kScreenW - w) / 2, y = 84;
+    const float frac = static_cast<float>(boss_.Hp()) / static_cast<float>(boss_.MaxHp());
+    const char* label = "GUNSHIP";
+    DrawHudText(label, (cfg::kScreenW - MeasureText(label, 14)) / 2, y - 18, 14);
+    DrawRectangle(x, y, w, h, Fade(BLACK, 0.45f));
+    DrawRectangle(x, y, static_cast<int>(static_cast<float>(w) * frac), h, Color {220, 60, 60, 255});
+    DrawRectangleLines(x, y, w, h, RAYWHITE);
 }
 
 void Game::DrawHealthBar(const Pilot& p, int x, int y) const
@@ -1014,6 +1104,24 @@ void Game::DrawRefuelling(const Pilot& p) const
 
 // ---- panels -------------------------------------------------------------
 
+// OFF -> PILOT 1 -> PILOT 2 -> BOTH with two players; a plain toggle with one.
+void Game::CycleAssist(int step)
+{
+    const int states = twoPlayer_ ? 4 : 2;
+    assistMask_ = ((assistMask_ & (states - 1)) + step + states) % states;
+}
+
+const char* Game::AssistLabel() const
+{
+    if (!twoPlayer_) { return (assistMask_ & 1) ? "ON" : "OFF"; }
+    switch (assistMask_ & 3) {
+        case 1:  return "PILOT 1";
+        case 2:  return "PILOT 2";
+        case 3:  return "BOTH";
+        default: return "OFF";
+    }
+}
+
 void Game::DrawTitleRow(Row row, int y, const char* label, const char* value) const
 {
     assert(label != nullptr && value != nullptr);
@@ -1053,7 +1161,8 @@ void Game::DrawTitle() const
     DrawTitleRow(Row::PilotOne,   y, "PILOT 1",    profiles_.At(profileIdx_[0]));      y += kTitleRowH;
     if (twoPlayer_) { DrawTitleRow(Row::PilotTwo, y, "PILOT 2", profiles_.At(profileIdx_[1])); }
     y += kTitleRowH;
-    DrawTitleRow(Row::Difficulty, y, "DIFFICULTY", Diff().name);                       y += 60;
+    DrawTitleRow(Row::Difficulty, y, "DIFFICULTY", Diff().name);                       y += kTitleRowH;
+    DrawTitleRow(Row::Assist,     y, "ASSIST",     AssistLabel());                     y += 60;
 
     const int best1 = scores_.BestFor(profiles_.At(profileIdx_[0]));
     DrawText(TextFormat("%s's best: %06d", profiles_.At(profileIdx_[0]), best1), px + 30, y, 18, LIGHTGRAY); y += 40;

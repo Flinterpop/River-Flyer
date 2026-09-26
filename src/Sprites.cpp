@@ -120,6 +120,7 @@ Sprites::Sprites()
     boat_   = GenBoat();
     gun_    = GenGun();
     sam_    = GenSam();
+    boss_   = GenBoss();
     for (int i = 0; i < 5; ++i) { pickups_[static_cast<size_t>(i)] = GenPickup(i); }
     assert(player_.id != 0 && rock_.id != 0 && fuel_.id != 0 && bullet_.id != 0);
     assert(water_.id != 0 && grass_.id != 0 && trees_.front().id != 0 && boat_.id != 0 && gun_.id != 0);
@@ -135,6 +136,7 @@ Sprites::~Sprites()
 {
     for (Texture2D& t : pickups_) { UnloadTexture(t); }
     UnloadTexture(sam_);
+    UnloadTexture(boss_);
     UnloadTexture(gun_);
     UnloadTexture(boat_);
     for (Texture2D& t : trees_) { UnloadTexture(t); }
@@ -421,6 +423,33 @@ const Texture2D& Sprites::Pickup(int which) const
 }
 
 // 0: gold star. 1: blue shield bubble. 2: three-way spread arrows. 3: extra plane.
+// The stage boss: a wide grey gunship, nose down towards the player.
+Texture2D Sprites::GenBoss()
+{
+    const int w = static_cast<int>(cfg::kBossW) * S, h = static_cast<int>(cfg::kBossH) * S;
+    const float cx = static_cast<float>(w) * 0.5f;
+    Image img = GenImageColor(w, h, BLANK);
+
+    const Color body {90, 96, 110, 255}, dark {60, 66, 78, 255}, glass {120, 200, 255, 255};
+    // Wing across the top, fuselage down the middle, nose at the bottom.
+    ImageDrawRectangle(&img, 0, static_cast<int>(h * 0.18f), w, static_cast<int>(h * 0.24f), body);
+    ImageDrawRectangle(&img, 0, static_cast<int>(h * 0.34f), w, static_cast<int>(h * 0.08f), dark);
+    ImageDrawRectangle(&img, static_cast<int>(cx) - w / 10, 0, w / 5, h, body);
+    ImageDrawTriangle(&img, Vector2 {cx - static_cast<float>(w) / 10.0f, static_cast<float>(h) * 0.82f},
+                            Vector2 {cx, static_cast<float>(h)},
+                            Vector2 {cx + static_cast<float>(w) / 10.0f, static_cast<float>(h) * 0.82f}, dark);
+    // Engine pods and cockpit glass.
+    for (int side = -1; side <= 1; side += 2) {
+        const float ex = cx + static_cast<float>(side) * static_cast<float>(w) * 0.3f;
+        ImageDrawRectangle(&img, static_cast<int>(ex) - w / 22, static_cast<int>(h * 0.14f), w / 11, static_cast<int>(h * 0.34f), dark);
+        ImageDrawCircleV(&img, Vector2 {ex, static_cast<float>(h) * 0.48f}, w / 26, Color {255, 170, 60, 255});
+    }
+    ImageDrawCircleV(&img, Vector2 {cx, static_cast<float>(h) * 0.7f}, w / 18, glass);
+    // Red stripe so it reads as hostile.
+    ImageDrawRectangle(&img, 0, static_cast<int>(h * 0.26f), w, 3 * S, Color {200, 60, 60, 255});
+    return Upload(img);
+}
+
 Texture2D Sprites::GenPickup(int which)
 {
     assert(which >= 0 && which < 5);

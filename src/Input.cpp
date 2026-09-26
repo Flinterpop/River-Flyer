@@ -70,8 +70,8 @@ Vector2 ReadMove(const InputMap& m)
     if (PadDown(m.pad, GAMEPAD_BUTTON_LEFT_FACE_RIGHT)) { dir.x += 1.0f; }
     if (PadDown(m.pad, GAMEPAD_BUTTON_LEFT_FACE_UP))    { dir.y -= 1.0f; }
     if (PadDown(m.pad, GAMEPAD_BUTTON_LEFT_FACE_DOWN))  { dir.y += 1.0f; }
-    if (m.pad == 0) {   // the touch stick belongs to pilot one
-        const Vector2 t = touch::Move();
+    {   // each pilot has their own half of the screen while two are playing
+        const Vector2 t = touch::Move(m.pad);
         dir.x += t.x;
         dir.y += t.y;
     }
@@ -85,14 +85,14 @@ bool FireHeld(const InputMap& m)
 {
     if (IsKeyDown(m.fire)) { return true; }
     if (m.fire == KEY_RIGHT_CONTROL && IsKeyDown(KEY_RIGHT_SHIFT)) { return true; }   // either works for pilot 2
-    if (m.pad == 0 && touch::FireHeld()) { return true; }
+    if (touch::FireHeld(m.pad)) { return true; }
     return PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) || PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_TRIGGER_2);
 }
 
 bool ChaffPressed(const InputMap& m)
 {
     if (IsKeyPressed(m.chaff)) { return true; }
-    if (m.pad == 0 && touch::ChaffPressed()) { return true; }
+    if (touch::ChaffPressed(m.pad)) { return true; }
     if (m.pad < 0 || !IsGamepadAvailable(m.pad)) { return false; }
     return IsGamepadButtonPressed(m.pad, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT) || IsGamepadButtonPressed(m.pad, GAMEPAD_BUTTON_LEFT_TRIGGER_1);
 }
@@ -100,7 +100,7 @@ bool ChaffPressed(const InputMap& m)
 bool JamHeld(const InputMap& m)
 {
     if (IsKeyDown(m.jam)) { return true; }
-    if (m.pad == 0 && touch::JamHeld()) { return true; }
+    if (touch::JamHeld(m.pad)) { return true; }
     return PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_FACE_LEFT) || PadDown(m.pad, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
 }
 

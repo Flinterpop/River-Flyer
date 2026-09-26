@@ -133,6 +133,7 @@ constexpr float kSevereHealth       = 25.0f;                         // thicker,
 constexpr float kSmokeGapHealthy    = 0.20f;                         // seconds between puffs at kSmokeHealth
 constexpr float kSmokeGapSevere     = 0.07f;                         // ... and at zero
 constexpr float kScrapeSparkGap     = 0.05f;                         // seconds between spark bursts while scraping
+constexpr float kScrapeHapticGap    = 0.25f;                         // seconds of no contact before the next scrape buzz
 constexpr int   kSparksPerBurst     = 7;
 constexpr float kSparkSeconds       = 0.45f;
 constexpr float kSparkSpeed         = 200.0f;                        // px per second
@@ -142,6 +143,13 @@ constexpr float kBounceX            = 44.0f;                         // sideways
 constexpr float kBounceY            = 10.0f;                         // and a nudge downstream
 constexpr int   kHealthBarW         = 200;
 constexpr int   kHealthBarH         = 10;
+
+// Assist: a per-pilot handicap so a younger player can fly alongside an
+// older one without changing the world for both (spawn rates, scroll speed
+// and guns are shared by definition).
+constexpr int   kAssistLives      = 2;                               // extra planes
+constexpr float kAssistDamage     = 0.5f;                            // hull damage taken
+constexpr float kAssistFuelBurn   = 0.6f;                            // fuel burn rate
 
 // Lives: losing one resets the craft and grants a short blinking grace period.
 constexpr int   kLives            = 3;
@@ -303,6 +311,24 @@ constexpr int   kBridgeGap      = 10;                                // strips b
 constexpr float kBridgeH        = 22.0f;
 constexpr int   kBridgeHp       = 3;
 constexpr int   kPointsPerBridge = 500;
+
+// Stage boss: a gunship that arrives at the end of each stage, rakes the
+// river with shells for a while, and leaves (or goes down) either way.
+constexpr float kBossW            = 150.0f;
+constexpr float kBossH            = 90.0f;
+constexpr int   kBossHp           = 14;                              // bullet hits at stage 0
+constexpr int   kBossHpPerStage   = 6;
+constexpr float kBossSpeed        = 105.0f;                          // px per second across the river
+constexpr float kBossEntrySpeed   = 90.0f;
+constexpr float kBossStationY     = 70.0f;                           // where it settles, px from the top
+constexpr float kBossMargin       = 10.0f;
+constexpr float kBossReload       = 2.2f;                            // seconds between salvos
+constexpr float kBossShellSpeed   = 180.0f;
+constexpr float kBossSpread       = 0.22f;                           // radians between the three shells
+constexpr float kBossSeconds      = 26.0f;                           // patience before it climbs away
+constexpr float kBossFlashSeconds = 0.12f;
+constexpr int   kPointsPerBoss    = 2000;
+constexpr float kBossRamDamage    = 60.0f;                           // flying into it
 
 // Music: an 8-bar chiptune loop synthesised at start-up.
 constexpr float kMusicBpm     = 140.0f;

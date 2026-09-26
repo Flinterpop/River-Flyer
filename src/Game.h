@@ -3,6 +3,7 @@
 #include <array>
 
 #include "Audio.h"
+#include "Boss.h"
 #include "Bullets.h"
 #include "Effects.h"
 #include "HighScores.h"
@@ -29,7 +30,7 @@ public:
 
 private:
     // Title-screen rows.
-    enum class Row { Players, PilotOne, PilotTwo, Difficulty, Count };
+    enum class Row { Players, PilotOne, PilotTwo, Difficulty, Assist, Count };
 
     // ---- flow ----
     void StartGame();
@@ -66,11 +67,14 @@ private:
     void UpdateGuns(float dt);
     void UpdateSams(float dt);
     void UpdateMissiles(float dt);
+    void UpdateBoss(float dt);
     void UpdateCountermeasures(Pilot& p, float dt);
     bool PilotVisible(const Pilot& p) const;
     int  Score() const;
     int  PilotCount() const { return twoPlayer_ ? 2 : 1; }
     const cfg::Difficulty& Diff() const { return cfg::kDifficulties[difficulty_]; }
+    void CycleAssist(int step);
+    const char* AssistLabel() const;   // OFF / ON / PILOT 1 / PILOT 2 / BOTH
 
     // ---- drawing ----
     void DrawWorld() const;
@@ -80,6 +84,7 @@ private:
     void DrawFuelBar(const Pilot& p, int x, int y) const;
     void DrawHealthBar(const Pilot& p, int x, int y) const;
     void DrawWarnings(const Pilot& p, int x, int y, bool rightAlign) const;
+    void DrawBossBar() const;
     void DrawLives(const Pilot& p, int x, int y, bool rightToLeft) const;
     void DrawTitle() const;
     void DrawTitleRow(Row row, int y, const char* label, const char* value) const;
@@ -102,6 +107,7 @@ private:
     Terrain    terrain_;
     Effects    effects_;
     Shells     shells_;
+    Boss       boss_;
     Missiles   missiles_;
     HighScores scores_;
     Profiles   profiles_;
@@ -109,6 +115,7 @@ private:
     std::array<Pilot, cfg::kMaxPilots> pilots_ {};
     bool twoPlayer_  {false};
     int  difficulty_ {cfg::kDefaultDifficulty};
+    int  assistMask_ {0};          // bit per pilot: an easier ride for that seat
     std::array<int, cfg::kMaxPilots> profileIdx_ {0, 1};   // title-screen selection per pilot
     Row  row_        {Row::Players};
     float demoX_     {-100.0f};    // title-screen fly-by plane
@@ -121,6 +128,8 @@ private:
     int   missileKills_ {0};
     int   stars_      {0};
     int   bridges_    {0};
+    int   bosses_     {0};
+    int   lastStage_  {0};        // to notice a stage boundary
     int   otters_     {0};
     int   finalScore_ {0};         // frozen when the last plane is lost
     int   newRow_     {-1};        // row of the entry just added, or -1
