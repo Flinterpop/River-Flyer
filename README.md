@@ -42,39 +42,19 @@ Notes:
 
 ### Game Center
 
-Solo runs post to a **Best Score** leaderboard when the player is signed in
-to Game Center (the sign-in is Apple's own, shown once at start-up and
-dismissible for good). The game-over panel grows a LEADERBOARD button while
-a player is signed in. Two-player runs are not posted: a shared score under
-one account would not mean much on a global board. Everything is a no-op on
-the other platforms — see `src/Leaderboard.h`.
+Solo runs post to a **Best Score** leaderboard when the player is signed in to Game Center (the sign-in is Apple's own, shown once at start-up and dismissible for good). The game-over panel grows a LEADERBOARD button while a player is signed in. Two-player runs are not posted: a shared score under one account would not mean much on a global board. Everything is a no-op on the other platforms — see `src/Leaderboard.h`.
 
 ### Stage bosses
 
-Every stage change sends up a **gunship**: it slides in from the top, weaves
-across the river raking it with three-shell salvos, and takes bullets until
-it goes down — a red bar under the score tracks its armour, which grows with
-each stage. Flying into it hurts. It is not a wall: the river keeps
-scrolling, and if nobody brings it down it climbs away after half a minute.
-Killing one is worth 2,000.
+Every stage change sends up a **gunship**: it slides in from the top, weaves across the river raking it with three-shell salvos, and takes bullets until it goes down — a red bar under the score tracks its armour, which grows with each stage. Flying into it hurts. It is not a wall: the river keeps scrolling, and if nobody brings it down it climbs away after half a minute. Killing one is worth 2,000.
 
 ### Assist
 
-A fifth title-screen row, **ASSIST**, gives one seat an easier ride without
-changing the world for both (spawn rates, scroll speed and the guns are
-shared by definition): two extra planes, half the hull damage and a slower
-fuel burn. With one player it is OFF / ON; with two it cycles
-OFF / PILOT 1 / PILOT 2 / BOTH, and the assisted pilot's name carries an
-ASSIST tag on the HUD. Useful when a seven-year-old and a twelve-year-old
-want the same game.
+A fifth title-screen row, **ASSIST**, gives one seat an easier ride without changing the world for both (spawn rates, scroll speed and the guns are shared by definition): two extra planes, half the hull damage and a slower fuel burn. With one player it is OFF / ON; with two it cycles OFF / PILOT 1 / PILOT 2 / BOTH, and the assisted pilot's name carries an ASSIST tag on the HUD. Useful when a seven-year-old and a twelve-year-old want the same game.
 
 ### Two players on one tablet
 
-Set **PLAYERS** to 2 on the title screen and the touch layer splits down the
-middle: pilot one steers in the right half with FIRE / CHAFF / JAM in the
-bottom-right corner, pilot two has the mirrored set on the left. Each half
-has its own floating stick, so two people can share an iPad. The planes carry
-a small **1** and **2** and start on their own player's side.
+Set **PLAYERS** to 2 on the title screen and the touch layer splits down the middle: pilot one steers in the right half with FIRE / CHAFF / JAM in the bottom-right corner, pilot two has the mirrored set on the left. Each half has its own floating stick, so two people can share an iPad. The planes carry a small **1** and **2** and start on their own player's side.
 
 ### On an Android phone or tablet
 
@@ -195,7 +175,9 @@ The first build downloads the Android Gradle Plugin (9.4.1, matched to the Gradl
 - `src/Storage.*` writes the two records to the app's internal data folder, the only place a native activity may write without asking.
 - `src/main.cpp` opens the window at `0 x 0` (the full display) and lets `Canvas` letterbox, and it survives the window being taken away during start-up (a lock screen or a call): raylib 6.0 runs its GL setup twice on Android, and if the surface vanishes between the two passes the second leaves rlgl with no default texture, shader or batch, so the game waits for the surface and runs `rlglInit()` again.
 - The library is linked with `-z max-page-size=16384`: Android 15 and later show a warning dialog (and Google Play refuses uploads) for native code that is not 16 KB-page aligned.
-- The version is read from `src/Config.h` by `android/app/build.gradle`, so the APK follows the same bump as the desktop and web builds. Release builds are signed with the debug key unless `android/keystore.properties` names a real one; that is enough for sideloading.
+- The version is read from `src/Config.h` by `android/app/build.gradle`, so the APK follows the same bump as the desktop and web builds.
+- Release builds are signed by the key that `android/keystore.properties` names (git-ignored, along with `*.jks` and `*.keystore`). That key is the original Android debug key, copied to its own file with its own password, so every APK ever released carries the same certificate and installs over the last one without losing scores. **Keep a backup of the key file and its password somewhere off this PC**: without them a new APK cannot upgrade an installed copy, and players would have to uninstall first and lose their records. Without `keystore.properties` a release build falls back to this machine's debug key, which only matches while this PC's `%USERPROFILE%\.android\debug.keystore` survives.
+- `android/gradle.properties` sets `android.builtInKotlin=false`: AGP 9 otherwise bundles the Kotlin standard library, a 2 MB `classes.dex`, into an app with no Kotlin in it. Gradle warns the option is deprecated; when a later AGP removes it, check the APK for a large `classes.dex` again.
 - The launcher icon is drawn by `android/make_icon.py` (Pillow), in keeping with the rest of the game generating its own art.
 
 ### iOS build
@@ -217,7 +199,7 @@ The first configure downloads raylib's source tarball and SDL 3.4; after that it
 
 ### Tests
 
-`tests/rf_tests.cpp` covers the parts of the game that are pure logic: the river generator across every difficulty and a spread of seeds, the high-score table, and the pilot list including their round trip through `Storage`. It opens no window, so it runs anywhere the desktop build runs. The desktop presets build it; the phone and browser presets skip it.
+`tests/rf_tests.cpp` covers the parts of the game that are pure logic: the river generator across every difficulty and a spread of seeds at both the desktop and the tallest canvas height, the canvas-height fit, the gunship boss (armour, entry, weave, salvos, death and retreat), the hull, health-pack, fuel-burn and assist rules in `src/Pilot.h`, the high-score table, and the pilot list including their round trip through `Storage`. Touch layout is not covered: it needs a window, so it is checked on a phone before a release. It opens no window, so it runs anywhere the desktop build runs. The desktop presets build it; the phone and browser presets skip it.
 
 ```powershell
 cmake --build --preset debug
@@ -234,7 +216,10 @@ The generator's own assertions are half of what the tests check, so `rf_tests` k
 |---|---|
 | `src/Config.h` | Every tunable: sizes, speeds, spawn chances, difficulty presets, stage palettes, animation and sound parameters, version |
 | `src/Game.*` | State machine (Title, EnterName, Playing, Paused, GameOver), per-pilot play, collisions, pickups, scoring, HUD and panels |
-| `src/Pilot.h` | One player: plane, controls, planes left, fuel, timers, power-ups |
+| `src/Pilot.h` | One player: plane, controls, planes left, fuel, hull, timers, power-ups; the hull, fuel and assist rules |
+| `src/Boss.*` | The gunship at each stage change: entry, weave, three-shell salvos, armour, retreat |
+| `src/Haptics.*` | Taptic feedback on iPhone (`Haptics.mm`); a no-op everywhere else |
+| `src/Leaderboard.*` | Game Center sign-in and Best Score board on iOS (`Leaderboard.mm`); a no-op everywhere else |
 | `src/Input.*` | Keyboard and gamepad bindings per pilot; menu navigation; pilot one also takes the touch layer |
 | `src/Touch.*` | Touch controls: floating stick, FIRE / CHAFF / JAM / pause buttons drawn in window space, menu taps in canvas coordinates; the mouse stands in for a finger on the desktop |
 | `src/Player.*` | The plane: movement, afterburner, drag chute, spiral and roll crash animations |
@@ -252,7 +237,7 @@ The generator's own assertions are half of what the tests check, so `rf_tests` k
 | `src/Screen.*` | Canvas height for this display (1000–1500), chosen at start-up |
 | `src/main.cpp` | Window and frame loop; on the web the browser drives the loop instead; on Android it also recovers from a window lost during start-up; on iOS it stops drawing while the app is in the background |
 | `web/shell.html` | The page around the WebAssembly build: Play button, fullscreen, canvas focus |
-| `tests/rf_tests.cpp` | Headless checks of the river generator, the score table and the pilot list; run with ctest |
+| `tests/rf_tests.cpp` | Headless checks of the river generator, canvas height, boss, hull and assist rules, score table and pilot list; run with ctest |
 | `.github/workflows/build.yml` | CI: the Windows build plus ctest, and the browser build, on every push and pull request |
 | `android/` | Gradle project for the APK: manifest (NativeActivity, portrait), `build.gradle` (drives the root CMake, version from `Config.h`), icon generator |
 | `ios/` | iPad / iPhone app: `make-ios.sh` drives the root CMake for iOS (raylib on SDL3, OpenGL ES 3.0); the raylib patch, `Info.plist` template, GLES header shims and icon; version from `Config.h` |
@@ -264,11 +249,14 @@ Notes:
 
 ## Releasing
 
-Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK and the iOS app read it from `Config.h`), build Release for the desktop, web and Android, then tag and publish:
+Two machines push to `main`: the Mac with iOS and gameplay work, this PC with Windows, web and Android. Releases are cut from the PC only, and the Mac holds off pushing while one is in progress. Before starting, `git fetch` and merge anything new; if it touched `src/Touch.*` or anything else the phones draw, try it on an Android phone first.
+
+Bump the version in `src/Config.h`, `vcpkg.json` and the badge above together (the APK and the iOS app read it from `Config.h`), build Release for the desktop, web and Android, try the APK on a phone, then publish. `--atomic` pushes `main` and the tag together or not at all, so a `main` that moved on in the meantime cannot leave a tag (and a release) on a commit that is not on it. Only run `gh release create` if that push succeeded:
 
 ```powershell
+git fetch; git log --oneline HEAD..origin/main    # must print nothing
 git tag -a v0.8.0 -m "v0.8.0"
-git push origin main v0.8.0
+git push --atomic origin main v0.8.0
 Compress-Archive build\Release\scroller.exe RiverFlyer-v0.8.0-win64.zip
 Compress-Archive build-web\index.html, build-web\index.js, build-web\index.wasm RiverFlyer-v0.8.0-web.zip
 Copy-Item android\app\build\outputs\apk\release\app-release.apk RiverFlyer-v0.8.0-android.apk
