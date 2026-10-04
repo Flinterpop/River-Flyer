@@ -12,7 +12,7 @@ constexpr const char* kTitle   = "River Flyer";
 
 constexpr int   kScreenW      = 960;
 constexpr int   kScreenH      = 1000;                                // design height; the canvas grows to the display (see Screen.h)
-constexpr int   kScreenHMax   = 1500;                                // tallest canvas the fixed-size pools are built for
+constexpr int   kScreenHMax   = 2240;                                // tallest canvas the fixed-size pools are built for (21:9 at kScreenW)
 constexpr int   kTargetFps    = 60;
 
 // Rendering: sprites are generated at kSpriteScale x and filtered down;
@@ -83,7 +83,8 @@ constexpr float kRampDistance = 8000.0f;                             // px of tr
 constexpr float kRampMaxMult  = 2.0f;
 
 // Obstacles live inside the river. Rocks kill; fuel depots refuel.
-constexpr int   kMaxObstacles     = 32;
+constexpr int   kMaxObstacles     = kStripCountMax * 2 / 3;         // ~2 slots per 3 strips, so a tall
+                                                                     // canvas is no sparser than a short one
 constexpr int   kRockChance       = 20;                              // percent chance per new strip
 constexpr int   kFuelChance       = 12;                              // percent chance per new strip (rolled if no rock)
 constexpr float kObstacleW        = 28.0f;

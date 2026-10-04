@@ -102,16 +102,21 @@ The game draws to an off-screen canvas that is always 960 px wide; its
 **height follows the display** (`src/Screen.h`), so an iPad fills the glass
 instead of showing a 4:3 letterbox and a tall phone gets more river than
 black bars. `screen::Fit()` picks the height at start-up from the window
-size, clamped to `[cfg::kScreenH, cfg::kScreenHMax]` (1000–1500); every
+size, clamped to `[cfg::kScreenH, cfg::kScreenHMax]` (1000–2240); every
 fixed-size pool is built for the maximum, so nothing allocates at run time.
+The cap is 21:9 at 960 wide, which covers every current phone — at the old
+1500 an iPhone 17 Pro Max lost 28% of its screen to black bars.
 
 | Device | Canvas |
 |---|---|
 | iPad Pro 13" (4:3) | 960 x 1280, exact fit |
 | iPad Pro 11" | 960 x 1392, exact fit |
-| iPhone 17 (19.5:9) | 960 x 1500 (clamped; small bars remain) |
+| iPhone 17 Pro Max (2.17:1) | 960 x 2085, exact fit |
+| 20:9 Android phone | 960 x 2133, exact fit |
 | Desktop window | 960 x 1000 as before |
 
 A taller canvas shows more river ahead, which makes the game slightly more
-forgiving on an iPad — the scroll speed is unchanged, there is just more
-warning. Raise `kScreenHMax` to let phones go taller still.
+forgiving — the scroll speed is unchanged, there is just more warning.
+`cfg::kMaxObstacles` is derived from `kStripCountMax` so the river is no
+sparser on a tall screen than a short one: the pool silently drops a spawn
+when it is full, which a fixed 32 would have done on a 2240-tall canvas.

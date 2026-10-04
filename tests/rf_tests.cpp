@@ -139,7 +139,11 @@ void TestScreenFit()
     CHECK(screen::H() == cfg::kScreenH);
     screen::Fit(2048, 2732);                          // iPad Pro 13" (portrait)
     CHECK(screen::H() == 1280);
-    screen::Fit(1080, 2400);                          // 20:9 Android phone: clamped
+    screen::Fit(1320, 2868);                          // iPhone 17 Pro Max: fills the glass, no letterbox
+    CHECK(screen::H() == 2085);
+    screen::Fit(1080, 2400);                          // 20:9 Android phone: still under the cap
+    CHECK(screen::H() == 2133);
+    screen::Fit(1080, 2700);                          // taller than 21:9: clamped
     CHECK(screen::H() == cfg::kScreenHMax);
     screen::Fit(cfg::kScreenW, cfg::kScreenH);
     CHECK(screen::H() == cfg::kScreenH);
